@@ -3,10 +3,9 @@ import { useAccount, useWalletClient, usePublicClient } from 'wagmi';
 import { erc20Abi } from 'viem';
 import type { ExecutionStatus, Quote } from '../types';
 import { 
-  getStepTransaction, 
+  getQuoteApi,
   getTransactionStatus,
   type LiFiRoute,
-  type LiFiStep 
 } from '../services/lifi-api';
 
 // Extended Quote type that may contain raw route from REST API
@@ -41,7 +40,7 @@ export function useLiFiExecution() {
       setStatus({
         status: 'pending',
         currentStep: 0,
-        totalSteps: quote.steps.length || 1,
+        totalSteps: 1,
       });
 
       // Get the raw route from the quote
@@ -59,141 +58,138 @@ export function useLiFiExecution() {
         toChain: route.toChainId,
         fromToken: route.fromToken?.symbol,
         toToken: route.toToken?.symbol,
-        steps: route.steps.length 
       });
 
-      // Process each step
-      for (let stepIndex = 0; stepIndex < route.steps.length; stepIndex++) {
-        if (abortRef.current) {
-          throw new Error('Execution cancelled');
-        }
+      // Use the /quote endpoint to get fresh transaction data
+      // This is more reliable than stepTransaction
+      setStatus({
+        status: 'pending',
+        currentStep: 1,
+        totalSteps: 1,
+      });
 
-        const step = route.steps[stepIndex];
-        console.log(`[LI.FI Execution] Processing step ${stepIndex + 1}/${route.steps.length}:`, step.tool);
+      console.log('[LI.FI Execution] Fetching quote with transaction data...');
+      
+      const quoteResponse = await getQuoteApi({
+        fromChain: route.fromChainId,
+        toChain: route.toChainId,
+        fromToken: route.fromToken.address,
+        toToken: route.toToken.address,
+        fromAmount: route.fromAmount,
+        fromAddress: address,
+        slippage: 0.01,
+      });
 
-        // Get transaction data for this step
-        setStatus({
-          status: 'pending',
-          currentStep: stepIndex + 1,
-          totalSteps: route.steps.length,
-        });
+      console.log('[LI.FI Execution] Quote response:', quoteResponse);
 
-        let stepWithTx: LiFiStep;
-        try {
-          stepWithTx = await getStepTransaction(step);
-          console.log('[LI.FI Execution] Got transaction data:', stepWithTx.transactionRequest);
-        } catch (error) {
-          console.error('[LI.FI Execution] Failed to get transaction data:', error);
-          throw new Error('Failed to prepare transaction. Please try again.');
-        }
+      if (!quoteResponse.transactionRequest) {
+        throw new Error('No transaction data in quote response');
+      }
 
-        if (!stepWithTx.transactionRequest) {
-          throw new Error('No transaction data returned from LI.FI');
-        }
+      const txRequest = quoteResponse.transactionRequest;
 
-        const txRequest = stepWithTx.transactionRequest;
+      // Check if we need token approval first
+      if (route.fromToken.address !== '0x0000000000000000000000000000000000000000') {
+        // Get approval address from quote response
+        const approvalAddress = quoteResponse.estimate?.approvalAddress || txRequest.to;
+        
+        const allowance = await checkAllowance(
+          route.fromToken.address as `0x${string}`,
+          address,
+          approvalAddress as `0x${string}`,
+          publicClient
+        );
 
-        // Check if we need token approval first
-        if (step.action.fromToken.address !== '0x0000000000000000000000000000000000000000') {
-          const allowance = await checkAllowance(
-            step.action.fromToken.address as `0x${string}`,
-            address,
-            txRequest.to as `0x${string}`,
-            publicClient
+        const requiredAmount = BigInt(route.fromAmount);
+        
+        if (allowance < requiredAmount) {
+          console.log('[LI.FI Execution] Approval needed, requesting...');
+          setStatus({
+            status: 'signing',
+            currentStep: 1,
+            totalSteps: 1,
+          });
+
+          // Request approval
+          const approvalTxHash = await approveToken(
+            route.fromToken.address as `0x${string}`,
+            approvalAddress as `0x${string}`,
+            walletClient
           );
 
-          const requiredAmount = BigInt(step.action.fromAmount);
-          
-          if (allowance < requiredAmount) {
-            console.log('[LI.FI Execution] Approval needed, requesting...');
-            setStatus({
-              status: 'signing',
-              currentStep: stepIndex + 1,
-              totalSteps: route.steps.length,
-            });
+          console.log('[LI.FI Execution] Approval tx:', approvalTxHash);
 
-            // Request approval
-            const approvalTxHash = await approveToken(
-              step.action.fromToken.address as `0x${string}`,
-              txRequest.to as `0x${string}`,
-              requiredAmount,
-              walletClient
-            );
-
-            console.log('[LI.FI Execution] Approval tx:', approvalTxHash);
-
-            // Wait for approval confirmation
-            await publicClient.waitForTransactionReceipt({
-              hash: approvalTxHash,
-            });
-            console.log('[LI.FI Execution] Approval confirmed');
-          }
+          // Wait for approval confirmation
+          await publicClient.waitForTransactionReceipt({
+            hash: approvalTxHash,
+          });
+          console.log('[LI.FI Execution] Approval confirmed');
         }
+      }
 
-        // Execute the main transaction
-        setStatus({
-          status: 'signing',
-          currentStep: stepIndex + 1,
-          totalSteps: route.steps.length,
-        });
+      // Execute the main transaction
+      setStatus({
+        status: 'signing',
+        currentStep: 1,
+        totalSteps: 1,
+      });
 
-        console.log('[LI.FI Execution] Sending transaction:', {
-          to: txRequest.to,
-          value: txRequest.value,
-          chainId: txRequest.chainId,
-        });
+      console.log('[LI.FI Execution] Sending transaction:', {
+        to: txRequest.to,
+        value: txRequest.value,
+        chainId: txRequest.chainId,
+      });
 
-        const txHash = await walletClient.sendTransaction({
-          to: txRequest.to as `0x${string}`,
-          data: txRequest.data as `0x${string}`,
-          value: BigInt(txRequest.value || '0'),
-          chain: undefined, // Use connected chain
-        });
+      const txHash = await walletClient.sendTransaction({
+        to: txRequest.to as `0x${string}`,
+        data: txRequest.data as `0x${string}`,
+        value: BigInt(txRequest.value || '0'),
+        chain: undefined, // Use connected chain
+      });
 
-        console.log('[LI.FI Execution] Transaction sent:', txHash);
+      console.log('[LI.FI Execution] Transaction sent:', txHash);
 
-        setStatus({
-          status: 'processing',
-          currentStep: stepIndex + 1,
-          totalSteps: route.steps.length,
+      setStatus({
+        status: 'processing',
+        currentStep: 1,
+        totalSteps: 1,
+        txHash,
+      });
+
+      // Wait for transaction confirmation
+      const receipt = await publicClient.waitForTransactionReceipt({
+        hash: txHash,
+      });
+
+      console.log('[LI.FI Execution] Transaction confirmed:', receipt.status);
+
+      if (receipt.status === 'reverted') {
+        throw new Error('Transaction reverted');
+      }
+
+      // For cross-chain transactions, poll for bridge completion
+      if (route.fromChainId !== route.toChainId) {
+        console.log('[LI.FI Execution] Waiting for bridge completion...');
+        await pollBridgeStatus(
           txHash,
-        });
-
-        // Wait for transaction confirmation
-        const receipt = await publicClient.waitForTransactionReceipt({
-          hash: txHash,
-        });
-
-        console.log('[LI.FI Execution] Transaction confirmed:', receipt.status);
-
-        if (receipt.status === 'reverted') {
-          throw new Error('Transaction reverted');
-        }
-
-        // For cross-chain transactions, poll for bridge completion
-        if (step.action.fromChainId !== step.action.toChainId) {
-          console.log('[LI.FI Execution] Waiting for bridge completion...');
-          await pollBridgeStatus(
-            txHash,
-            step.action.fromChainId,
-            step.action.toChainId,
-            step.tool,
-            () => {
-              setStatus({
-                status: 'processing',
-                currentStep: stepIndex + 1,
-                totalSteps: route.steps.length,
-                txHash,
-              });
-            }
-          );
-        }
+          route.fromChainId,
+          route.toChainId,
+          quoteResponse.tool || 'unknown',
+          () => {
+            setStatus({
+              status: 'processing',
+              currentStep: 1,
+              totalSteps: 1,
+              txHash,
+            });
+          }
+        );
       }
 
       setStatus({
         status: 'completed',
-        currentStep: route.steps.length,
-        totalSteps: route.steps.length,
+        currentStep: 1,
+        totalSteps: 1,
       });
 
       return true;
@@ -252,7 +248,6 @@ async function checkAllowance(
 async function approveToken(
   tokenAddress: `0x${string}`,
   spenderAddress: `0x${string}`,
-  _amount: bigint, // Unused - we approve max instead
   walletClient: any
 ): Promise<`0x${string}`> {
   // Approve max amount to avoid multiple approvals
@@ -274,7 +269,7 @@ async function pollBridgeStatus(
   fromChain: number,
   toChain: number,
   bridge: string,
-  onUpdate: (status: any) => void
+  onUpdate: () => void
 ): Promise<void> {
   let polls = 0;
   
@@ -288,7 +283,7 @@ async function pollBridgeStatus(
       });
 
       console.log('[LI.FI Execution] Bridge status:', status.status, status.substatus);
-      onUpdate(status);
+      onUpdate();
 
       if (status.status === 'DONE') {
         return;

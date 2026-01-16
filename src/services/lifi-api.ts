@@ -188,6 +188,7 @@ export async function getSupportedChains(): Promise<any[]> {
 
 /**
  * Get a quote for a cross-chain swap/bridge
+ * This endpoint returns transactionRequest directly - no need for stepTransaction
  */
 export async function getQuoteApi(params: {
   fromChain: number;
@@ -197,21 +198,21 @@ export async function getQuoteApi(params: {
   fromAmount: string;
   fromAddress: string;
   slippage?: number;
+  integrator?: string;
 }): Promise<LiFiQuoteResponse> {
-  const requestBody = {
-    fromChain: params.fromChain,
-    toChain: params.toChain,
+  // Use query params for GET request (quote endpoint)
+  const queryParams = new URLSearchParams({
+    fromChain: params.fromChain.toString(),
+    toChain: params.toChain.toString(),
     fromToken: params.fromToken,
     toToken: params.toToken,
     fromAmount: params.fromAmount,
     fromAddress: params.fromAddress,
-    slippage: params.slippage || 0.01, // 1% default
-  };
-
-  return lifiRequest<LiFiQuoteResponse>('/quote', {
-    method: 'POST',
-    body: JSON.stringify(requestBody),
+    slippage: (params.slippage || 0.01).toString(),
+    integrator: params.integrator || 'liquyn-swap',
   });
+
+  return lifiRequest<LiFiQuoteResponse>(`/quote?${queryParams}`);
 }
 
 /**
