@@ -1,30 +1,62 @@
-import { defineChain } from 'viem';
+import { defineChain, type Chain } from 'viem';
 import { mainnet, arbitrum, optimism, polygon, base, bsc, avalanche } from 'wagmi/chains';
 
-// Hyperliquid Chain ID (Mainnet)
+// Hyperliquid Chain IDs
 export const HYPERLIQUID_CHAIN_ID = 998;
+export const HYPERLIQUID_TESTNET_CHAIN_ID = 999; // Using different ID for testnet in wallet
 
-// Hyperliquid Chain Definition (Mainnet)
-export const hyperliquid = defineChain({
-  id: HYPERLIQUID_CHAIN_ID,
-  name: 'Hyperliquid',
-  nativeCurrency: {
-    name: 'HYPE',
-    symbol: 'HYPE',
-    decimals: 18,
-  },
-  rpcUrls: {
-    default: {
-      http: ['https://rpc.hyperliquid.xyz/evm'],
+// Hyperliquid Chain Definition (Mainnet) with RainbowKit icon
+export const hyperliquid = {
+  ...defineChain({
+    id: HYPERLIQUID_CHAIN_ID,
+    name: 'Hyperliquid',
+    nativeCurrency: {
+      name: 'HYPE',
+      symbol: 'HYPE',
+      decimals: 18,
     },
-  },
-  blockExplorers: {
-    default: {
-      name: 'Hyperliquid Explorer',
-      url: 'https://explorer.hyperliquid.xyz',
+    rpcUrls: {
+      default: {
+        http: ['https://rpc.hyperliquid.xyz/evm'],
+      },
     },
-  },
-});
+    blockExplorers: {
+      default: {
+        name: 'Hyperliquid Explorer',
+        url: 'https://explorer.hyperliquid.xyz',
+      },
+    },
+  }),
+  iconUrl: '/assets/green.png',
+  iconBackground: '#0a0a0a',
+} as Chain & { iconUrl: string; iconBackground: string };
+
+// Hyperliquid Testnet Chain Definition with RainbowKit icon
+export const hyperliquidTestnet = {
+  ...defineChain({
+    id: HYPERLIQUID_TESTNET_CHAIN_ID,
+    name: 'Hyperliquid Testnet',
+    nativeCurrency: {
+      name: 'HYPE',
+      symbol: 'HYPE',
+      decimals: 18,
+    },
+    rpcUrls: {
+      default: {
+        http: ['https://rpc.hyperliquid-testnet.xyz/evm'],
+      },
+    },
+    blockExplorers: {
+      default: {
+        name: 'Hyperliquid Testnet Explorer',
+        url: 'https://explorer.hyperliquid-testnet.xyz',
+      },
+    },
+    testnet: true,
+  }),
+  iconUrl: '/assets/green.png',
+  iconBackground: '#0a0a0a',
+} as Chain & { iconUrl: string; iconBackground: string };
 
 // Supported source chains for bridging (external chains)
 export const sourceChains = [
@@ -38,7 +70,7 @@ export const sourceChains = [
 ] as const;
 
 // All supported chains including Hyperliquid
-export const allChains = [...sourceChains, hyperliquid] as const;
+export const allChains = [...sourceChains, hyperliquid, hyperliquidTestnet] as const;
 
 // Chain metadata for UI - includes both mainnet chains and Hyperliquid options
 export const chainMetadata: Record<number, {
@@ -96,6 +128,13 @@ export const chainMetadata: Record<number, {
     logo: '/assets/green.png',
     color: '#4ADE80',
   },
+  [HYPERLIQUID_TESTNET_CHAIN_ID]: {
+    name: 'Hyperliquid Testnet',
+    shortName: 'HYPE-T',
+    logo: '/assets/green.png',
+    color: '#4ADE80',
+    isTestnet: true,
+  },
 };
 
 // UI chain entries for the selector (includes testnet as separate entry)
@@ -118,8 +157,8 @@ export const selectorChains: ChainEntry[] = [
   { id: 8453, key: 'base', name: 'Base', shortName: 'BASE', logo: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/base/info/logo.png', color: '#0052FF' },
   { id: 56, key: 'bnb', name: 'BNB Chain', shortName: 'BNB', logo: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/binance/info/logo.png', color: '#F3BA2F' },
   { id: 43114, key: 'avax', name: 'Avalanche', shortName: 'AVAX', logo: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/avalanchec/info/logo.png', color: '#E84142' },
-  { id: 998, key: 'hyperliquid', name: 'Hyperliquid', shortName: 'HYPE', logo: '/assets/green.png', color: '#4ADE80' },
-  { id: 998, key: 'hyperliquid-testnet', name: 'Hyperliquid (Testnet)', shortName: 'HYPE-T', logo: '/assets/green.png', color: '#4ADE80', isTestnet: true, rpcUrl: 'https://rpc.hyperliquid-testnet.xyz/evm' },
+  { id: HYPERLIQUID_CHAIN_ID, key: 'hyperliquid', name: 'Hyperliquid', shortName: 'HYPE', logo: '/assets/green.png', color: '#4ADE80' },
+  { id: HYPERLIQUID_TESTNET_CHAIN_ID, key: 'hyperliquid-testnet', name: 'Hyperliquid (Testnet)', shortName: 'HYPE-T', logo: '/assets/green.png', color: '#4ADE80', isTestnet: true, rpcUrl: 'https://rpc.hyperliquid-testnet.xyz/evm' },
 ];
 
 export type SupportedChainId = (typeof allChains)[number]['id'];
