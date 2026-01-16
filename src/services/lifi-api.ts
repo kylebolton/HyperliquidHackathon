@@ -249,11 +249,24 @@ export async function getRoutesApi(params: {
 
 /**
  * Get transaction data for a specific step
+ * The API expects the step object directly in the body
  */
 export async function getStepTransaction(step: LiFiStep): Promise<LiFiStep> {
+  // Ensure the step has all required fields for the API
+  const stepRequest = {
+    id: step.id,
+    type: step.type,
+    tool: step.tool,
+    toolDetails: step.toolDetails,
+    action: step.action,
+    estimate: step.estimate,
+  };
+  
+  console.log('[LI.FI API] Step transaction request:', stepRequest);
+  
   return lifiRequest<LiFiStep>('/advanced/stepTransaction', {
     method: 'POST',
-    body: JSON.stringify({ step }),
+    body: JSON.stringify(stepRequest),
   });
 }
 
