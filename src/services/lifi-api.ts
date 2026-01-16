@@ -249,10 +249,20 @@ export async function getRoutesApi(params: {
 
 /**
  * Get transaction data for a specific step
- * The API expects the step object directly in the body
+ * The API expects: id, type, tool, toolDetails, action, estimate, integrator, includedSteps
  */
 export async function getStepTransaction(step: LiFiStep): Promise<LiFiStep> {
-  // Ensure the step has all required fields for the API
+  // Build the step object for includedSteps array
+  const includedStep = {
+    id: step.id,
+    type: step.type,
+    tool: step.tool,
+    toolDetails: step.toolDetails,
+    action: step.action,
+    estimate: step.estimate,
+  };
+  
+  // The API requires these top-level fields plus includedSteps array
   const stepRequest = {
     id: step.id,
     type: step.type,
@@ -260,6 +270,8 @@ export async function getStepTransaction(step: LiFiStep): Promise<LiFiStep> {
     toolDetails: step.toolDetails,
     action: step.action,
     estimate: step.estimate,
+    integrator: 'liquyn-swap',
+    includedSteps: [includedStep],
   };
   
   console.log('[LI.FI API] Step transaction request:', stepRequest);
