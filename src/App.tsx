@@ -7,6 +7,7 @@ import { config } from './config/wagmi';
 import { Layout } from './components/layout/Layout';
 import { BridgeWidget } from './components/bridge/BridgeWidget';
 import { AnimatedContainer } from './components/ui/AnimatedContainer';
+import { NetworkBackground } from './components/ui/NetworkBackground';
 
 const queryClient = new QueryClient();
 
@@ -24,6 +25,7 @@ function App() {
     <WagmiProvider config={config}>
       <QueryClientProvider client={queryClient}>
         <RainbowKitProvider theme={customTheme} modalSize="compact">
+          <NetworkBackground />
           <Layout>
             <div className="max-w-7xl mx-auto">
               {/* Hero Section */}
