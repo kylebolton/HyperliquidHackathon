@@ -1,9 +1,17 @@
 import { useState, useCallback, useRef } from 'react';
-import { useAccount, useWalletClient } from 'wagmi';
-import { executeRoute, getRoutes } from '@lifi/sdk';
+import { useAccount, useWalletClient, usePublicClient } from 'wagmi';
+import { erc20Abi } from 'viem';
 import type { ExecutionStatus, Quote } from '../types';
-import { HYPERLIQUID_CHAIN_ID } from '../config/chains';
 import { parseErrorMessage, type ParsedError } from '../lib/errors';
+import { 
+  getStepTransaction, 
+  getTransactionStatus,
+  type LiFiRoute,
+  type LiFiStep 
+} from '../services/lifi-api';
+
+// Extended Quote type that may contain raw route from REST API
+type QuoteWithRawRoute = Quote & { _rawRoute?: LiFiRoute };
 
 export interface StepExecution {
   status: 'pending' | 'active' | 'complete' | 'failed';
@@ -22,6 +30,8 @@ export interface RetryExecutionState {
 }
 
 const MAX_RETRIES = 3;
+const STATUS_POLL_INTERVAL = 5000;
+const MAX_STATUS_POLLS = 60;
 
 // Errors that can be retried
 const RETRYABLE_ERROR_PATTERNS = [
@@ -44,6 +54,7 @@ function isRetryableError(error: Error | string): boolean {
 export function useRetryExecution() {
   const { address } = useAccount();
   const { data: walletClient } = useWalletClient();
+  const publicClient = usePublicClient();
   
   const [state, setState] = useState<RetryExecutionState>({
     status: {
@@ -83,7 +94,7 @@ export function useRetryExecution() {
     quote: Quote,
     isRetry: boolean = false
   ): Promise<boolean> => {
-    if (!address || !walletClient) {
+    if (!address || !walletClient || !publicClient) {
       setState(prev => ({
         ...prev,
         status: { status: 'failed', currentStep: 0, totalSteps: 0, error: 'Wallet not connected' },
@@ -96,8 +107,23 @@ export function useRetryExecution() {
     lastQuoteRef.current = quote;
     abortControllerRef.current = new AbortController();
 
+    // Get the raw route from the quote
+    const quoteWithRoute = quote as QuoteWithRawRoute;
+    
+    if (!quoteWithRoute._rawRoute) {
+      setState(prev => ({
+        ...prev,
+        status: { status: 'failed', currentStep: 0, totalSteps: 0, error: 'No route data available' },
+        lastError: parseErrorMessage('No route data available. Please refresh the quote and try again.'),
+        canRetry: false,
+      }));
+      return false;
+    }
+    
+    const route = quoteWithRoute._rawRoute;
+
     // Initialize step executions
-    const initialStepExecutions: StepExecution[] = quote.steps.map(() => ({
+    const initialStepExecutions: StepExecution[] = route.steps.map(() => ({
       status: 'pending' as const,
     }));
 
@@ -106,7 +132,7 @@ export function useRetryExecution() {
       status: {
         status: 'pending',
         currentStep: 0,
-        totalSteps: quote.steps.length,
+        totalSteps: route.steps.length,
       },
       stepExecutions: initialStepExecutions,
       lastError: null,
@@ -115,115 +141,136 @@ export function useRetryExecution() {
     }));
 
     try {
-      // Fetch the actual route object from LI.FI
-      const routesResult = await getRoutes({
-        fromChainId: quote.fromChain,
-        toChainId: HYPERLIQUID_CHAIN_ID,
-        fromTokenAddress: quote.fromToken.address,
-        toTokenAddress: quote.toToken.address,
-        fromAmount: quote.fromAmount,
-        fromAddress: address,
+      console.log('[LI.FI Retry Execution] Starting with route:', { 
+        id: route.id, 
+        steps: route.steps.length 
       });
 
-      if (!routesResult.routes.length) {
-        throw new Error('No routes available. Try a different amount or token pair.');
+      // Process each step
+      for (let stepIndex = 0; stepIndex < route.steps.length; stepIndex++) {
+        if (abortControllerRef.current?.signal.aborted) {
+          throw new Error('Execution cancelled');
+        }
+
+        const step = route.steps[stepIndex];
+        
+        // Update step status to active
+        setState(prev => ({
+          ...prev,
+          status: {
+            status: 'pending',
+            currentStep: stepIndex + 1,
+            totalSteps: route.steps.length,
+          },
+          stepExecutions: prev.stepExecutions.map((s, i) => 
+            i === stepIndex ? { ...s, status: 'active' as const, startTime: Date.now() } : s
+          ),
+        }));
+
+        // Get transaction data for this step
+        let stepWithTx: LiFiStep;
+        try {
+          stepWithTx = await getStepTransaction(step);
+        } catch (error) {
+          throw new Error('Failed to prepare transaction. Please try again.');
+        }
+
+        if (!stepWithTx.transactionRequest) {
+          throw new Error('No transaction data returned from LI.FI');
+        }
+
+        const txRequest = stepWithTx.transactionRequest;
+
+        // Check if we need token approval
+        if (step.action.fromToken.address !== '0x0000000000000000000000000000000000000000') {
+          const allowance = await checkAllowance(
+            step.action.fromToken.address as `0x${string}`,
+            address,
+            txRequest.to as `0x${string}`,
+            publicClient
+          );
+
+          const requiredAmount = BigInt(step.action.fromAmount);
+          
+          if (allowance < requiredAmount) {
+            setState(prev => ({
+              ...prev,
+              status: {
+                ...prev.status,
+                status: 'signing',
+              },
+            }));
+
+            const approvalTxHash = await approveToken(
+              step.action.fromToken.address as `0x${string}`,
+              txRequest.to as `0x${string}`,
+              walletClient
+            );
+
+            await publicClient.waitForTransactionReceipt({
+              hash: approvalTxHash,
+            });
+          }
+        }
+
+        // Execute the main transaction
+        setState(prev => ({
+          ...prev,
+          status: {
+            ...prev.status,
+            status: 'signing',
+          },
+        }));
+
+        const txHash = await walletClient.sendTransaction({
+          to: txRequest.to as `0x${string}`,
+          data: txRequest.data as `0x${string}`,
+          value: BigInt(txRequest.value || '0'),
+          chain: undefined,
+        });
+
+        setState(prev => ({
+          ...prev,
+          status: {
+            ...prev.status,
+            status: 'processing',
+            txHash,
+          },
+          stepExecutions: prev.stepExecutions.map((s, i) => 
+            i === stepIndex ? { ...s, txHash } : s
+          ),
+        }));
+
+        // Wait for confirmation
+        const receipt = await publicClient.waitForTransactionReceipt({
+          hash: txHash,
+        });
+
+        if (receipt.status === 'reverted') {
+          throw new Error('Transaction reverted');
+        }
+
+        // Poll for bridge completion if cross-chain
+        if (step.action.fromChainId !== step.action.toChainId) {
+          await pollBridgeStatus(txHash, step.action.fromChainId, step.action.toChainId, step.tool);
+        }
+
+        // Mark step complete
+        setState(prev => ({
+          ...prev,
+          stepExecutions: prev.stepExecutions.map((s, i) => 
+            i === stepIndex ? { ...s, status: 'complete' as const, endTime: Date.now() } : s
+          ),
+        }));
       }
-
-      const route = routesResult.routes[0];
-
-      setState(prev => ({
-        ...prev,
-        status: {
-          status: 'signing',
-          currentStep: 0,
-          totalSteps: route.steps.length,
-        },
-        stepExecutions: route.steps.map(() => ({
-          status: 'pending' as const,
-        })),
-      }));
-
-      // Execute the route
-      await executeRoute(route, {
-        updateRouteHook: (updatedRoute) => {
-          if (abortControllerRef.current?.signal.aborted) return;
-
-          const newStepExecutions: StepExecution[] = updatedRoute.steps.map((step) => {
-            const execution = (step as { execution?: { 
-              status: string; 
-              process?: Array<{ txHash?: string; substatus?: string; startedAt?: number; doneAt?: number }> 
-            } }).execution;
-
-            if (!execution) {
-              return { status: 'pending' as const };
-            }
-
-            const processes = execution.process || [];
-            const latestProcess = processes[processes.length - 1];
-
-            if (execution.status === 'DONE') {
-              return {
-                status: 'complete' as const,
-                txHash: latestProcess?.txHash,
-                startTime: processes[0]?.startedAt,
-                endTime: latestProcess?.doneAt,
-              };
-            }
-
-            if (execution.status === 'FAILED') {
-              return {
-                status: 'failed' as const,
-                txHash: latestProcess?.txHash,
-                error: 'Step failed',
-              };
-            }
-
-            return {
-              status: 'active' as const,
-              txHash: latestProcess?.txHash,
-              startTime: processes[0]?.startedAt,
-            };
-          });
-
-          // Find current step
-          const currentStepIndex = newStepExecutions.findIndex(s => s.status === 'active');
-          const completedSteps = newStepExecutions.filter(s => s.status === 'complete').length;
-          
-          // Get transaction hash from active or last complete step
-          const activeStep = newStepExecutions.find(s => s.status === 'active');
-          const txHash = activeStep?.txHash || newStepExecutions[completedSteps - 1]?.txHash;
-
-          // Determine overall status
-          const hasActiveStep = newStepExecutions.some(s => s.status === 'active');
-          const hasFailedStep = newStepExecutions.some(s => s.status === 'failed');
-          
-          let overallStatus: ExecutionStatus['status'] = 'processing';
-          if (hasFailedStep) overallStatus = 'failed';
-          else if (!hasActiveStep && completedSteps === newStepExecutions.length) overallStatus = 'completed';
-
-          setState(prev => ({
-            ...prev,
-            status: {
-              status: overallStatus,
-              currentStep: currentStepIndex >= 0 ? currentStepIndex : completedSteps,
-              totalSteps: updatedRoute.steps.length,
-              txHash,
-            },
-            stepExecutions: newStepExecutions,
-          }));
-        },
-      });
 
       setState(prev => ({
         ...prev,
         status: {
           status: 'completed',
-          currentStep: quote.steps.length,
-          totalSteps: quote.steps.length,
+          currentStep: route.steps.length,
+          totalSteps: route.steps.length,
         },
-        stepExecutions: prev.stepExecutions.map(s => 
-          s.status === 'active' ? { ...s, status: 'complete' as const, endTime: Date.now() } : s
-        ),
         canRetry: false,
       }));
 
@@ -256,7 +303,7 @@ export function useRetryExecution() {
 
       return false;
     }
-  }, [address, walletClient, state.retryCount]);
+  }, [address, walletClient, publicClient, state.retryCount]);
 
   const retry = useCallback(async (): Promise<boolean> => {
     if (!lastQuoteRef.current || state.retryCount >= MAX_RETRIES) {
@@ -277,4 +324,78 @@ export function useRetryExecution() {
     isExecuting: ['pending', 'signing', 'processing'].includes(state.status.status),
     maxRetries: MAX_RETRIES,
   };
+}
+
+// Helper: Check token allowance
+async function checkAllowance(
+  tokenAddress: `0x${string}`,
+  ownerAddress: `0x${string}`,
+  spenderAddress: `0x${string}`,
+  publicClient: any
+): Promise<bigint> {
+  try {
+    const allowance = await publicClient.readContract({
+      address: tokenAddress,
+      abi: erc20Abi,
+      functionName: 'allowance',
+      args: [ownerAddress, spenderAddress],
+    });
+    return allowance as bigint;
+  } catch {
+    return BigInt(0);
+  }
+}
+
+// Helper: Approve token spending
+async function approveToken(
+  tokenAddress: `0x${string}`,
+  spenderAddress: `0x${string}`,
+  walletClient: any
+): Promise<`0x${string}`> {
+  const maxAmount = BigInt('0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff');
+  
+  const hash = await walletClient.writeContract({
+    address: tokenAddress,
+    abi: erc20Abi,
+    functionName: 'approve',
+    args: [spenderAddress, maxAmount],
+  });
+  
+  return hash;
+}
+
+// Helper: Poll bridge status
+async function pollBridgeStatus(
+  txHash: string,
+  fromChain: number,
+  toChain: number,
+  bridge: string
+): Promise<void> {
+  let polls = 0;
+  
+  while (polls < MAX_STATUS_POLLS) {
+    try {
+      const status = await getTransactionStatus({
+        txHash,
+        fromChain,
+        toChain,
+        bridge,
+      });
+
+      if (status.status === 'DONE') {
+        return;
+      }
+
+      if (status.status === 'FAILED') {
+        throw new Error(status.substatusMessage || 'Bridge transaction failed');
+      }
+    } catch (error: any) {
+      if (!error.message?.includes('NOT_FOUND')) {
+        console.warn('[LI.FI Retry Execution] Status check error:', error);
+      }
+    }
+
+    polls++;
+    await new Promise(resolve => setTimeout(resolve, STATUS_POLL_INTERVAL));
+  }
 }

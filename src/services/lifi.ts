@@ -1,6 +1,7 @@
-import { createConfig, getQuote, getRoutes, executeRoute, getStatus, getChains, getTokens, type Route, type RoutesRequest, type QuoteRequest, type GetStatusRequest, type ExtendedChain, type Token as LiFiToken } from '@lifi/sdk';
+import { createConfig, getQuote, executeRoute, getStatus, getChains, getTokens, type Route, type QuoteRequest, type GetStatusRequest, type ExtendedChain, type Token as LiFiToken } from '@lifi/sdk';
 import type { Quote, RouteStep } from '../types';
 import { HYPERLIQUID_CHAIN_ID, SONIC_CHAIN_ID } from '../config/chains';
+import type { LiFiRoute } from './lifi-api';
 
 const lifiConfig = createConfig({
   integrator: 'liquyn-swap',
@@ -112,7 +113,8 @@ export async function getLiFiChains(): Promise<ExtendedChain[]> {
   }
 }
 
-function convertToQuote(route: Route): Quote {
+// Convert REST API route to Quote format (used when bypassing SDK)
+function convertApiRouteToQuote(route: LiFiRoute): Quote {
   const steps: RouteStep[] = route.steps.map((step) => ({
     type: step.type as 'swap' | 'bridge' | 'cross',
     tool: step.tool,
@@ -140,9 +142,8 @@ function convertToQuote(route: Route): Quote {
     estimatedTime: step.estimate.executionDuration,
   }));
 
-  // Store the raw route for execution - this is the actual LI.FI route object
-  // We'll use this instead of re-fetching during execution
-  const quote: Quote & { _rawRoute?: Route } = {
+  // Store the raw API route for execution
+  const quote: Quote & { _rawRoute?: LiFiRoute } = {
     id: route.id,
     fromChain: route.fromChainId,
     toChain: route.toChainId,
@@ -158,8 +159,6 @@ function convertToQuote(route: Route): Quote {
       symbol: route.toToken.symbol,
       name: route.toToken.name || route.toToken.symbol,
       decimals: route.toToken.decimals,
-      // Use a placeholder that we'll resolve during execution
-      // The actual address from LI.FI might be wrong
       address: route.toToken.address,
       chainId: route.toChainId,
       logo: route.toToken.logoURI,
@@ -171,10 +170,10 @@ function convertToQuote(route: Route): Quote {
     gasCostUSD: route.gasCostUSD || '0',
     steps,
     slippage: 0.5,
-    _rawRoute: route, // Store the raw route for direct execution
+    _rawRoute: route, // Store the raw API route for direct execution
   };
 
-  console.log('[LI.FI] Converted quote - toToken address from LI.FI:', route.toToken.address);
+  console.log('[LI.FI API] Converted quote - toToken:', route.toToken.symbol, route.toToken.address);
   
   return quote;
 }
@@ -300,54 +299,62 @@ export async function fetchRoutes(
   try {
     const toChainId = await discoverHyperliquidChainId();
     
-    // Always try to resolve the destination token address from LI.FI's token list
-    let resolvedToTokenAddress = toTokenAddress;
+    // First, get available tokens on Hyperliquid from LI.FI
+    const hlTokens = await getHyperliquidTokens();
+    console.log('[LI.FI] Available Hyperliquid tokens from LI.FI:', hlTokens.map(t => ({ symbol: t.symbol, address: t.address })));
     
-    // Check if we're looking for USDC (by our local address or by detecting it's a stablecoin)
-    const isLookingForUsdc = 
-      toTokenAddress.toLowerCase() === '0xeb62eee3685fc4c43992febcd9e75443aef550ab' ||
-      toTokenAddress.toLowerCase() === '0x0000000000000000000000000000000000000000'; // native placeholder
+    // Find the matching destination token
+    // For USDC, we want to find LI.FI's USDC token on Hyperliquid
+    let resolvedToTokenAddress = toTokenAddress;
+    const isLookingForUsdc = toTokenAddress.toLowerCase() === '0xeb62eee3685fc4c43992febcd9e75443aef550ab';
+    const isLookingForNative = toTokenAddress.toLowerCase() === '0x0000000000000000000000000000000000000000';
     
     if (isLookingForUsdc) {
-      const lifiUsdcAddress = await findHyperliquidTokenAddress('USDC');
-      if (lifiUsdcAddress) {
-        resolvedToTokenAddress = lifiUsdcAddress;
-        console.log('[LI.FI] Using LI.FI USDC address for Hyperliquid:', lifiUsdcAddress);
+      // Find USDC on Hyperliquid from LI.FI's token list
+      const lifiUsdc = hlTokens.find(t => 
+        t.symbol.toUpperCase() === 'USDC' || 
+        t.symbol.toUpperCase() === 'USDC.E'
+      );
+      if (lifiUsdc) {
+        resolvedToTokenAddress = lifiUsdc.address;
+        console.log('[LI.FI] Using LI.FI USDC address:', lifiUsdc.address);
       } else {
-        // If LI.FI doesn't have the token, try using USDC.e or any stablecoin
-        const altUsdcAddress = await findHyperliquidTokenAddress('USDC.e');
-        if (altUsdcAddress) {
-          resolvedToTokenAddress = altUsdcAddress;
-          console.log('[LI.FI] Using LI.FI USDC.e address for Hyperliquid:', altUsdcAddress);
-        }
+        console.log('[LI.FI] No USDC found on Hyperliquid, using original address');
       }
+    } else if (isLookingForNative) {
+      // For native token (HYPE), use the native address
+      resolvedToTokenAddress = '0x0000000000000000000000000000000000000000';
     }
     
-    console.log('[LI.FI] Fetching routes with params:', { 
+    console.log('[LI.FI] Fetching routes via REST API:', { 
       fromChainId, 
       toChainId, 
       fromTokenAddress, 
       toTokenAddress: resolvedToTokenAddress,
       fromAmount,
-      slippage: slippage / 100
     });
     
-    const routesRequest: RoutesRequest = {
+    // Use direct REST API instead of SDK to bypass potential SDK bugs
+    const { getRoutesApi } = await import('./lifi-api');
+    
+    const result = await getRoutesApi({
       fromChainId,
       toChainId,
       fromTokenAddress,
       toTokenAddress: resolvedToTokenAddress,
       fromAmount,
       fromAddress,
-      options: {
-        slippage: slippage / 100,
-        order: 'RECOMMENDED',
-      },
-    };
+      slippage: slippage / 100,
+    });
     
-    const result = await getRoutes(routesRequest);
     console.log('[LI.FI] Routes found:', result.routes.length);
-    return result.routes.map(convertToQuote);
+    
+    if (result.routes.length > 0) {
+      // Log the actual toToken address that LI.FI returned
+      console.log('[LI.FI] Route toToken from response:', result.routes[0].toToken);
+    }
+    
+    return result.routes.map(convertApiRouteToQuote);
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
     console.error('[LI.FI] Error fetching routes:', message, error);
@@ -355,6 +362,9 @@ export async function fetchRoutes(
     // Re-throw with cleaner message for UI
     if (message.includes('toChainId') || message.includes('allowed values')) {
       throw new Error(`Chain ID ${await discoverHyperliquidChainId()} not recognized. Please check LI.FI chain support.`);
+    }
+    if (message.includes('invalid') || message.includes('deny list')) {
+      throw new Error('Token not supported for bridging to Hyperliquid. LI.FI may have limited token support.');
     }
     throw error;
   }
