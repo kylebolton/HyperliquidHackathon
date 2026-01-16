@@ -57,12 +57,10 @@ function PrivacyStepIndicator({
   step, 
   index, 
   totalSteps,
-  isActive,
 }: { 
   step: PrivacyStep; 
   index: number; 
   totalSteps: number;
-  isActive: boolean;
 }) {
   const Icon = stepIcons[step.id];
   const description = stepDescriptions[step.id];
@@ -181,7 +179,7 @@ export function PrivacyProgress({ executionState, onClose, onRetry }: PrivacyPro
     return null;
   }
 
-  const statusConfig = {
+  const statusConfigs = {
     executing: {
       icon: Loader2,
       color: 'text-purple-400',
@@ -203,8 +201,16 @@ export function PrivacyProgress({ executionState, onClose, onRetry }: PrivacyPro
       message: 'Privacy transaction failed',
       animate: false,
     },
-  }[status] || statusConfig.executing;
+    idle: {
+      icon: Loader2,
+      color: 'text-purple-400',
+      bgColor: 'bg-purple-500/10',
+      message: 'Preparing...',
+      animate: true,
+    },
+  } as const;
 
+  const statusConfig = statusConfigs[status] || statusConfigs.executing;
   const Icon = statusConfig.icon;
 
   return (
@@ -266,7 +272,6 @@ export function PrivacyProgress({ executionState, onClose, onRetry }: PrivacyPro
               step={step}
               index={index}
               totalSteps={steps.length}
-              isActive={executionState.currentStepId === step.id}
             />
           ))}
         </div>

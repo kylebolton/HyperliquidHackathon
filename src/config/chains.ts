@@ -2,8 +2,9 @@ import { defineChain, type Chain } from 'viem';
 import { mainnet, arbitrum, optimism, polygon, base, bsc, avalanche } from 'wagmi/chains';
 
 // Hyperliquid Chain IDs
-export const HYPERLIQUID_CHAIN_ID = 998;
-export const HYPERLIQUID_TESTNET_CHAIN_ID = 999; // Using different ID for testnet in wallet
+// Note: HyperEVM mainnet is 999, testnet is 998
+export const HYPERLIQUID_CHAIN_ID = 999;  // Mainnet (HyperEVM)
+export const HYPERLIQUID_TESTNET_CHAIN_ID = 998; // Testnet
 
 // Sonic Chain ID
 export const SONIC_CHAIN_ID = 146;

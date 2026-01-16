@@ -30,11 +30,6 @@ function App() {
             <div className="max-w-7xl mx-auto">
               {/* Hero Section */}
               <div className="text-center px-4 pt-4 pb-8 sm:pt-8 sm:pb-12">
-                <AnimatedContainer>
-                  <div className="inline-flex items-center gap-2 px-4 py-2 bg-accent/5 border border-accent/20 rounded-full mb-6">
-                    <span className="text-sm font-medium text-accent">⚡ Powered by LI.FI</span>
-                  </div>
-                </AnimatedContainer>
 
                 <AnimatedContainer delay={0.1}>
                   <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-white mb-3">

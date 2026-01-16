@@ -12,8 +12,7 @@ import {
   type RailgunChainId,
   type PrivacyOperationState,
 } from '../services/railgun';
-import type { Quote, PrivacyRouteQuote, StandardRouteQuote, PrivacyStep, PrivacyExecutionState } from '../types';
-import { HYPERLIQUID_CHAIN_ID } from '../config/chains';
+import type { Quote, PrivacyRouteQuote, StandardRouteQuote, PrivacyStep, PrivacyExecutionState, PrivacyStepId } from '../types';
 
 interface UsePrivacyRouteParams {
   fromChainId: number | null;

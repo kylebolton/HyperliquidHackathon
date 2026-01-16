@@ -129,6 +129,20 @@ const ERROR_PATTERNS: Array<{
   },
   {
     patterns: [
+      /hyperliquid.*not.*supported/i,
+      /not.*supported.*li\.?fi/i,
+      /toChainId must be equal/i,
+      /destination chain.*not supported/i,
+      /chain.*not.*allowed/i,
+    ],
+    code: 'ROUTE_NOT_FOUND',
+    title: 'Hyperliquid Not Supported',
+    message: 'LI.FI does not currently support Hyperliquid as a destination chain.',
+    action: 'Check back later as LI.FI continues to add new chains.',
+    isRetryable: false,
+  },
+  {
+    patterns: [
       /no route/i,
       /route not found/i,
       /no path/i,

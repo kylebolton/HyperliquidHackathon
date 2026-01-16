@@ -21,26 +21,55 @@ export async function discoverHyperliquidChainId(): Promise<number> {
     const chains = await getChains();
     cachedLiFiChains = chains;
     
+    // Log all chains for debugging - search for anything with "hyp" to help find it
+    const possibleMatches = chains.filter(c => 
+      c.name.toLowerCase().includes('hyp') || 
+      c.key?.toLowerCase().includes('hyp') ||
+      c.id === 998 || c.id === 999
+    );
+    console.log('[LI.FI] Possible Hyperliquid matches:', possibleMatches.map(c => ({ id: c.id, name: c.name, key: c.key })));
+    console.log('[LI.FI] Total available chains:', chains.length);
+    
+    // Search for Hyperliquid with various possible identifiers
     const hyperliquid = chains.find(c => 
+      c.name.toLowerCase() === 'hyperliquid' ||
       c.name.toLowerCase().includes('hyperliquid') || 
       c.name.toLowerCase().includes('hyperevm') ||
-      c.key?.toLowerCase().includes('hyp') ||
+      c.key?.toLowerCase() === 'hyperliquid' ||
+      c.key?.toLowerCase() === 'hyp' ||
       c.key?.toLowerCase() === 'hpl' ||
       c.id === HYPERLIQUID_CHAIN_ID ||
       c.id === 999
     );
     
     if (hyperliquid) {
+      console.log('[LI.FI] ✓ Found Hyperliquid chain:', { id: hyperliquid.id, name: hyperliquid.name, key: hyperliquid.key });
       cachedHyperliquidChainId = hyperliquid.id;
       return hyperliquid.id;
     }
     
+    // If not found by name, try searching by chain ID 999 (mainnet)
+    const byId = chains.find(c => c.id === 999);
+    if (byId) {
+      console.log('[LI.FI] ✓ Found chain ID 999 (mainnet):', { id: byId.id, name: byId.name, key: byId.key });
+      cachedHyperliquidChainId = byId.id;
+      return byId.id;
+    }
+    
+    console.warn('[LI.FI] Hyperliquid not found by name or ID. Using fallback chain ID:', HYPERLIQUID_CHAIN_ID);
     cachedHyperliquidChainId = HYPERLIQUID_CHAIN_ID;
     return HYPERLIQUID_CHAIN_ID;
-  } catch {
+  } catch (error) {
+    console.error('[LI.FI] Error fetching chains:', error);
     cachedHyperliquidChainId = HYPERLIQUID_CHAIN_ID;
     return HYPERLIQUID_CHAIN_ID;
   }
+}
+
+export async function isHyperliquidSupported(): Promise<boolean> {
+  // Always return true - we know LI.FI supports Hyperliquid from their widget
+  // The chain discovery will handle finding the correct chain ID
+  return true;
 }
 
 export async function getHyperliquidTokens(): Promise<LiFiToken[]> {
@@ -258,13 +287,24 @@ export async function fetchRoutes(
   try {
     const toChainId = await discoverHyperliquidChainId();
     
+    // Try to resolve the destination token address if it's our local USDC address
     let resolvedToTokenAddress = toTokenAddress;
     if (toTokenAddress.toLowerCase() === '0xeb62eee3685fc4c43992febcd9e75443aef550ab') {
       const lifiUsdcAddress = await findHyperliquidTokenAddress('USDC');
       if (lifiUsdcAddress) {
         resolvedToTokenAddress = lifiUsdcAddress;
+        console.log('[LI.FI] Resolved USDC address:', lifiUsdcAddress);
       }
     }
+    
+    console.log('[LI.FI] Fetching routes with params:', { 
+      fromChainId, 
+      toChainId, 
+      fromTokenAddress, 
+      toTokenAddress: resolvedToTokenAddress,
+      fromAmount,
+      slippage: slippage / 100
+    });
     
     const routesRequest: RoutesRequest = {
       fromChainId,
@@ -280,9 +320,17 @@ export async function fetchRoutes(
     };
     
     const result = await getRoutes(routesRequest);
+    console.log('[LI.FI] Routes found:', result.routes.length);
     return result.routes.map(convertToQuote);
-  } catch {
-    return [];
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    console.error('[LI.FI] Error fetching routes:', message, error);
+    
+    // Re-throw with cleaner message for UI
+    if (message.includes('toChainId') || message.includes('allowed values')) {
+      throw new Error(`Chain ID ${await discoverHyperliquidChainId()} not recognized. Please check LI.FI chain support.`);
+    }
+    throw error;
   }
 }
 

@@ -1,6 +1,5 @@
-import { useState, useRef, useEffect } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
-import { Shield, ShieldOff, Info, X, Clock, DollarSign, Eye, EyeOff, ChevronRight, AlertTriangle } from 'lucide-react';
+import { useState } from 'react';
+import { Shield, ShieldOff, Info, Clock, DollarSign, Eye, EyeOff, ChevronRight, AlertTriangle } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { Modal } from '../ui/Modal';
 

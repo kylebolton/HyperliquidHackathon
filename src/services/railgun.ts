@@ -307,9 +307,19 @@ export async function executePrivacyFlow(
 }
 
 /**
+ * Privacy step IDs (must match PrivacyStepId type in types/index.ts)
+ */
+export type PrivacyStepIdType = 
+  | 'bridge_to_railgun'
+  | 'shield'
+  | 'wait'
+  | 'unshield'
+  | 'bridge_to_hyperliquid';
+
+/**
  * Get privacy steps for display
  */
-export function getPrivacySteps(): Array<{ id: string; label: string; description: string }> {
+export function getPrivacySteps(): Array<{ id: PrivacyStepIdType; label: string; description: string }> {
   return [
     {
       id: 'bridge_to_railgun',
