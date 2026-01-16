@@ -4,6 +4,7 @@ import { HYPERLIQUID_CHAIN_ID, SONIC_CHAIN_ID } from '../config/chains';
 
 const lifiConfig = createConfig({
   integrator: 'liquyn-swap',
+  apiKey: '07bbc064-8482-437e-b270-dbca23da1b44.644090d2-cdf2-4939-b5a3-a29d5b9e8572',
 });
 
 export { lifiConfig };
