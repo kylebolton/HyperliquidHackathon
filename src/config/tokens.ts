@@ -180,7 +180,7 @@ export const popularTokens: Record<number, Token[]> = {
       decimals: 18,
       address: NATIVE_TOKEN_ADDRESS,
       chainId: 146,
-      logo: 'https://raw.githubusercontent.com/Fantom-foundation/brand-assets/main/sonic/S-logo.png',
+      logo: 'https://s2.coinmarketcap.com/static/img/coins/64x64/32684.png',
     },
     {
       symbol: 'USDC',

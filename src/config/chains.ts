@@ -30,7 +30,7 @@ export const sonic = {
       },
     },
   }),
-  iconUrl: 'https://raw.githubusercontent.com/Fantom-foundation/brand-assets/main/sonic/S-logo.png',
+  iconUrl: 'https://s2.coinmarketcap.com/static/img/coins/64x64/32684.png',
   iconBackground: '#0a0a0a',
 } as Chain & { iconUrl: string; iconBackground: string };
 
@@ -155,7 +155,7 @@ export const chainMetadata: Record<number, {
   [SONIC_CHAIN_ID]: {
     name: 'Sonic',
     shortName: 'S',
-    logo: 'https://raw.githubusercontent.com/Fantom-foundation/brand-assets/main/sonic/S-logo.png',
+    logo: 'https://s2.coinmarketcap.com/static/img/coins/64x64/32684.png',
     color: '#1DB4F4',
   },
   [HYPERLIQUID_CHAIN_ID]: {
