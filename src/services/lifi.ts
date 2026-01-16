@@ -80,11 +80,14 @@ export async function getHyperliquidTokens(): Promise<LiFiToken[]> {
 
   try {
     const chainId = await discoverHyperliquidChainId();
+    console.log('[LI.FI] Fetching tokens for Hyperliquid chain ID:', chainId);
     const result = await getTokens({ chains: [chainId] });
     const tokens = result.tokens[chainId] || [];
+    console.log('[LI.FI] Available Hyperliquid tokens:', tokens.map(t => ({ symbol: t.symbol, address: t.address })));
     cachedHyperliquidTokens = tokens;
     return tokens;
-  } catch {
+  } catch (error) {
+    console.error('[LI.FI] Error fetching Hyperliquid tokens:', error);
     return [];
   }
 }
@@ -288,13 +291,26 @@ export async function fetchRoutes(
   try {
     const toChainId = await discoverHyperliquidChainId();
     
-    // Try to resolve the destination token address if it's our local USDC address
+    // Always try to resolve the destination token address from LI.FI's token list
     let resolvedToTokenAddress = toTokenAddress;
-    if (toTokenAddress.toLowerCase() === '0xeb62eee3685fc4c43992febcd9e75443aef550ab') {
+    
+    // Check if we're looking for USDC (by our local address or by detecting it's a stablecoin)
+    const isLookingForUsdc = 
+      toTokenAddress.toLowerCase() === '0xeb62eee3685fc4c43992febcd9e75443aef550ab' ||
+      toTokenAddress.toLowerCase() === '0x0000000000000000000000000000000000000000'; // native placeholder
+    
+    if (isLookingForUsdc) {
       const lifiUsdcAddress = await findHyperliquidTokenAddress('USDC');
       if (lifiUsdcAddress) {
         resolvedToTokenAddress = lifiUsdcAddress;
-        console.log('[LI.FI] Resolved USDC address:', lifiUsdcAddress);
+        console.log('[LI.FI] Using LI.FI USDC address for Hyperliquid:', lifiUsdcAddress);
+      } else {
+        // If LI.FI doesn't have the token, try using USDC.e or any stablecoin
+        const altUsdcAddress = await findHyperliquidTokenAddress('USDC.e');
+        if (altUsdcAddress) {
+          resolvedToTokenAddress = altUsdcAddress;
+          console.log('[LI.FI] Using LI.FI USDC.e address for Hyperliquid:', altUsdcAddress);
+        }
       }
     }
     

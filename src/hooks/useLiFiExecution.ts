@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import { useAccount, useWalletClient } from 'wagmi';
-import { executeRoute, getRoutes } from '@lifi/sdk';
+import { executeRoute, getRoutes, getTokens } from '@lifi/sdk';
 import type { ExecutionStatus, Quote } from '../types';
 import { HYPERLIQUID_CHAIN_ID } from '../config/chains';
 
@@ -27,12 +27,37 @@ export function useLiFiExecution() {
         totalSteps: quote.steps.length,
       });
 
+      // Get the actual token address from LI.FI for the destination
+      let toTokenAddress = quote.toToken.address;
+      
+      // If destination is USDC, query LI.FI for the correct token address on Hyperliquid
+      if (quote.toToken.symbol === 'USDC') {
+        try {
+          const tokensResult = await getTokens({ chains: [HYPERLIQUID_CHAIN_ID] });
+          const hlTokens = tokensResult.tokens[HYPERLIQUID_CHAIN_ID] || [];
+          const lifiUsdc = hlTokens.find(t => t.symbol === 'USDC' || t.symbol === 'USDC.e');
+          if (lifiUsdc) {
+            console.log('[LI.FI] Using LI.FI USDC address for Hyperliquid:', lifiUsdc.address);
+            toTokenAddress = lifiUsdc.address;
+          }
+        } catch (e) {
+          console.warn('[LI.FI] Could not fetch Hyperliquid tokens, using quote token address');
+        }
+      }
+      
+      console.log('[LI.FI] Fetching route for execution:', {
+        fromChain: quote.fromChain,
+        toChain: HYPERLIQUID_CHAIN_ID,
+        fromToken: quote.fromToken.address,
+        toToken: toTokenAddress,
+      });
+
       // Fetch the actual route object from LI.FI
       const routesResult = await getRoutes({
         fromChainId: quote.fromChain,
         toChainId: HYPERLIQUID_CHAIN_ID,
         fromTokenAddress: quote.fromToken.address,
-        toTokenAddress: quote.toToken.address,
+        toTokenAddress: toTokenAddress,
         fromAmount: quote.fromAmount,
         fromAddress: address,
       });
@@ -42,6 +67,11 @@ export function useLiFiExecution() {
       }
 
       const route = routesResult.routes[0];
+      console.log('[LI.FI] Route to execute:', { 
+        id: route.id, 
+        toToken: route.toToken,
+        steps: route.steps.length 
+      });
 
       setStatus({
         status: 'signing',
