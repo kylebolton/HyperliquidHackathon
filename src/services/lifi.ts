@@ -1,4 +1,4 @@
-import { createConfig, getQuote, getRoutes, executeRoute, type Route, type RoutesRequest, type QuoteRequest } from '@lifi/sdk';
+import { createConfig, getQuote, getRoutes, executeRoute, getStatus, type Route, type RoutesRequest, type QuoteRequest, type GetStatusRequest } from '@lifi/sdk';
 import type { Quote, RouteStep } from '../types';
 import { HYPERLIQUID_CHAIN_ID } from '../config/chains';
 
@@ -265,5 +265,98 @@ export async function checkRouteAvailable(
     return routes.length > 0;
   } catch {
     return false;
+  }
+}
+
+// Transaction status types
+export interface TransactionStatus {
+  status: 'NOT_FOUND' | 'PENDING' | 'DONE' | 'FAILED' | 'INVALID';
+  substatus?: string;
+  substatusMessage?: string;
+  bridgeExplorerLink?: string;
+  fromChain?: {
+    chainId: number;
+    txHash: string;
+    amount: string;
+    token: {
+      symbol: string;
+      decimals: number;
+    };
+  };
+  toChain?: {
+    chainId: number;
+    txHash?: string;
+    amount?: string;
+    token?: {
+      symbol: string;
+      decimals: number;
+    };
+  };
+  tool?: string;
+}
+
+// Poll transaction status for cross-chain bridges
+export async function getTransactionStatus(
+  txHash: string,
+  fromChainId: number,
+  toChainId: number = HYPERLIQUID_CHAIN_ID
+): Promise<TransactionStatus> {
+  try {
+    const statusRequest: GetStatusRequest = {
+      txHash,
+      fromChain: fromChainId,
+      toChain: toChainId,
+    };
+
+    const result = await getStatus(statusRequest);
+
+    // Cast to any to handle SDK type variations
+    const sending = (result as { sending?: { 
+      chainId: number; 
+      txHash: string; 
+      amount?: string;
+      token?: { symbol: string; decimals: number };
+    } }).sending;
+    
+    const receiving = (result as { receiving?: { 
+      chainId: number; 
+      txHash?: string; 
+      amount?: string;
+      token?: { symbol: string; decimals: number };
+    } }).receiving;
+    
+    const bridgeExplorerLink = (result as { bridgeExplorerLink?: string }).bridgeExplorerLink;
+    const tool = (result as { tool?: string }).tool;
+
+    return {
+      status: result.status as TransactionStatus['status'],
+      substatus: result.substatus,
+      substatusMessage: result.substatusMessage,
+      bridgeExplorerLink,
+      fromChain: sending ? {
+        chainId: sending.chainId,
+        txHash: sending.txHash,
+        amount: sending.amount || '0',
+        token: {
+          symbol: sending.token?.symbol || '',
+          decimals: sending.token?.decimals || 18,
+        },
+      } : undefined,
+      toChain: receiving ? {
+        chainId: receiving.chainId,
+        txHash: receiving.txHash,
+        amount: receiving.amount,
+        token: {
+          symbol: receiving.token?.symbol || '',
+          decimals: receiving.token?.decimals || 18,
+        },
+      } : undefined,
+      tool,
+    };
+  } catch (error) {
+    console.error('Error fetching transaction status:', error);
+    return {
+      status: 'NOT_FOUND',
+    };
   }
 }

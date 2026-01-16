@@ -161,4 +161,9 @@ export const selectorChains: ChainEntry[] = [
   { id: HYPERLIQUID_TESTNET_CHAIN_ID, key: 'hyperliquid-testnet', name: 'Hyperliquid (Testnet)', shortName: 'HYPE-T', logo: '/assets/green.png', color: '#4ADE80', isTestnet: true, rpcUrl: 'https://rpc.hyperliquid-testnet.xyz/evm' },
 ];
 
+// Source chains for bridging TO Hyperliquid (excludes Hyperliquid itself)
+export const sourceSelectorChains = selectorChains.filter(
+  chain => chain.id !== HYPERLIQUID_CHAIN_ID && chain.id !== HYPERLIQUID_TESTNET_CHAIN_ID
+);
+
 export type SupportedChainId = (typeof allChains)[number]['id'];

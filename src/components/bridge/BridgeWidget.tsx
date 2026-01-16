@@ -2,17 +2,21 @@ import { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAccount, useBalance, useSwitchChain } from 'wagmi';
 import { parseUnits } from 'viem';
-import { ArrowDown, AlertCircle, Loader2, Info } from 'lucide-react';
+import { ArrowDown, AlertCircle, Loader2, Info, RefreshCw } from 'lucide-react';
 import { cn, formatAmount } from '../../lib/utils';
 import { ChainSelector, TokenSelector } from './ChainTokenSelector';
 import { QuoteCard } from './QuoteCard';
 import { ExecutionProgress } from './ExecutionProgress';
+import { RouteOptions } from './RouteOptions';
+import { SlippageSettings } from './SlippageSettings';
 import { DepositToHyperliquid } from '../deposit/DepositToHyperliquid';
 import { Button } from '../ui/Button';
-import { useLiFiQuote } from '../../hooks/useLiFiQuote';
-import { useLiFiExecution } from '../../hooks/useLiFiExecution';
+import { useLiFiRoutes } from '../../hooks/useLiFiQuote';
+import { useRetryExecution } from '../../hooks/useRetryExecution';
+import { useTransactionStatus, getStatusMessage } from '../../hooks/useTransactionStatus';
 import { hyperliquidTokens, type Token } from '../../config/tokens';
-import { HYPERLIQUID_CHAIN_ID, selectorChains } from '../../config/chains';
+import { HYPERLIQUID_CHAIN_ID, sourceSelectorChains } from '../../config/chains';
+import type { Quote } from '../../types';
 
 type ButtonState = {
   text: string;
@@ -20,6 +24,14 @@ type ButtonState = {
   variant: 'primary' | 'error' | 'warning';
   showLoader?: boolean;
 };
+
+type StatusMessage = {
+  type: 'error' | 'warning' | 'info';
+  message: string;
+  title?: string;
+  action?: string;
+  canRetry?: boolean;
+} | null;
 
 export function BridgeWidget() {
   const { address, isConnected, chainId: connectedChainId } = useAccount();
@@ -31,8 +43,10 @@ export function BridgeWidget() {
   const [fromToken, setFromToken] = useState<Token | null>(null);
   const [toToken, setToToken] = useState<Token>(hyperliquidTokens[0]); // Default to USDC
   const [amount, setAmount] = useState('');
+  const [slippage, setSlippage] = useState(1.0); // 1% default slippage
   const [autoDeposit, setAutoDeposit] = useState(false);
   const [showDepositModal, setShowDepositModal] = useState(false);
+  const [selectedRoute, setSelectedRoute] = useState<Quote | null>(null);
 
   // Get balance for selected token
   const { data: balance, isLoading: isBalanceLoading } = useBalance({
@@ -59,35 +73,71 @@ export function BridgeWidget() {
     return parseFloat(balance.formatted) >= parseFloat(amount);
   }, [balance, amount]);
 
-  // Get quote
+  // Get multiple routes for comparison
   const { 
-    data: quote, 
-    isLoading: isLoadingQuote, 
-    error: quoteError,
-    isFetched: isQuoteFetched,
-  } = useLiFiQuote({
+    data: routes, 
+    isLoading: isLoadingRoutes, 
+    error: routeError,
+    isFetched: isRoutesFetched,
+    refetch: refetchRoutes,
+  } = useLiFiRoutes({
     fromChainId,
     fromTokenAddress: fromToken?.address || null,
     toTokenAddress: toToken.address,
     amount: amountInUnits,
+    slippage,
     enabled: !!fromChainId && !!fromToken && !!amount && parseFloat(amount) > 0 && hasSufficientBalance,
   });
 
-  // Execution
-  const { status: executionStatus, execute, reset: resetExecution, isExecuting } = useLiFiExecution();
+  // Auto-select best route when routes change
+  useEffect(() => {
+    if (routes && routes.length > 0) {
+      setSelectedRoute(routes[0]);
+    } else {
+      setSelectedRoute(null);
+    }
+  }, [routes]);
+
+  // Execution with retry support
+  const { 
+    status: executionStatus, 
+    stepExecutions,
+    execute, 
+    retry,
+    reset: resetExecution, 
+    isExecuting,
+    lastError,
+    canRetry,
+    retryCount,
+    maxRetries,
+  } = useRetryExecution();
+
+  // Transaction status polling for cross-chain tracking
+  const { status: txStatus, isPolling } = useTransactionStatus({
+    txHash: executionStatus.txHash,
+    fromChainId: fromChainId || undefined,
+    enabled: !!executionStatus.txHash && executionStatus.status === 'processing',
+    onComplete: () => {
+      // Transaction completed on destination chain
+    },
+    onFailed: () => {
+      // Transaction failed
+    },
+  });
 
   // Check if on wrong network
   const isWrongNetwork = fromChainId && connectedChainId !== fromChainId;
 
   // Get chain name for display
   const fromChainName = fromChainKey 
-    ? selectorChains.find(c => c.key === fromChainKey)?.name 
-    : selectorChains.find(c => c.id === fromChainId)?.name;
+    ? sourceSelectorChains.find(c => c.key === fromChainKey)?.name 
+    : sourceSelectorChains.find(c => c.id === fromChainId)?.name;
 
   // Reset token when chain changes
   useEffect(() => {
     setFromToken(null);
     setAmount('');
+    setSelectedRoute(null);
   }, [fromChainId, fromChainKey]);
 
   // Determine button state with detailed feedback
@@ -113,26 +163,26 @@ export function BridgeWidget() {
     if (isWrongNetwork) {
       return { text: `Switch to ${fromChainName || 'Source Chain'}`, disabled: false, variant: 'warning' };
     }
-    if (isLoadingQuote) {
-      return { text: 'Finding Best Route...', disabled: true, variant: 'primary', showLoader: true };
+    if (isLoadingRoutes) {
+      return { text: 'Finding Best Routes...', disabled: true, variant: 'primary', showLoader: true };
     }
-    if (quoteError) {
+    if (routeError) {
       return { text: 'No Route Available', disabled: true, variant: 'error' };
     }
-    if (isQuoteFetched && !quote) {
+    if (isRoutesFetched && (!routes || routes.length === 0)) {
       return { text: 'No Route Found', disabled: true, variant: 'error' };
     }
     if (isExecuting) {
       return { text: 'Bridging...', disabled: true, variant: 'primary', showLoader: true };
     }
-    if (quote) {
+    if (selectedRoute) {
       return { text: 'Bridge to Hyperliquid', disabled: false, variant: 'primary' };
     }
-    return { text: 'Bridge to Hyperliquid', disabled: true, variant: 'primary' };
+    return { text: 'Select a Route', disabled: true, variant: 'primary' };
   }, [
     isConnected, fromChainId, fromToken, amount, isBalanceLoading, 
-    hasSufficientBalance, isWrongNetwork, isLoadingQuote, quoteError,
-    isQuoteFetched, quote, isExecuting
+    hasSufficientBalance, isWrongNetwork, isLoadingRoutes, routeError,
+    isRoutesFetched, routes, isExecuting, selectedRoute, fromChainName
   ]);
 
   // Handle bridge execution or network switch
@@ -141,13 +191,18 @@ export function BridgeWidget() {
       switchChain?.({ chainId: fromChainId as 1 | 10 | 42161 | 137 | 8453 | 56 | 43114 | 998 });
       return;
     }
-    if (!quote) return;
+    if (!selectedRoute) return;
     
-    const success = await execute(quote);
+    const success = await execute(selectedRoute);
     
     if (success && autoDeposit && toToken.symbol === 'USDC') {
       setShowDepositModal(true);
     }
+  };
+
+  // Handle retry
+  const handleRetry = async () => {
+    await retry();
   };
 
   // Handle max button
@@ -162,36 +217,55 @@ export function BridgeWidget() {
   };
 
   // Generate detailed error/info message
-  const statusMessage = useMemo(() => {
+  const statusMessage: StatusMessage = useMemo(() => {
     if (!isConnected) return null;
+    
+    // Show last error with action
+    if (lastError && executionStatus.status === 'failed') {
+      return {
+        type: 'error',
+        title: lastError.title,
+        message: lastError.message,
+        action: lastError.action,
+        canRetry: canRetry,
+      };
+    }
+    
     if (!hasSufficientBalance && amount && parseFloat(amount) > 0) {
       const needed = parseFloat(amount);
       const have = balance ? parseFloat(balance.formatted) : 0;
       return {
-        type: 'error' as const,
+        type: 'error',
         message: `You need ${formatAmount(needed.toString(), 4)} ${fromToken?.symbol} but only have ${formatAmount(have.toString(), 4)}`,
       };
     }
-    if (quoteError) {
+    if (routeError) {
       return {
-        type: 'error' as const,
-        message: quoteError.message || 'Failed to find a route. Try a different amount or token.',
+        type: 'error',
+        message: routeError.message || 'Failed to find a route. Try a different amount or token.',
       };
     }
-    if (isQuoteFetched && !quote && !isLoadingQuote && amount && parseFloat(amount) > 0 && hasSufficientBalance) {
+    if (isRoutesFetched && (!routes || routes.length === 0) && !isLoadingRoutes && amount && parseFloat(amount) > 0 && hasSufficientBalance) {
       return {
-        type: 'warning' as const,
+        type: 'warning',
         message: 'No bridge route found for this pair. Try a larger amount or different token.',
       };
     }
     if (isWrongNetwork && fromChainId) {
       return {
-        type: 'info' as const,
+        type: 'info',
         message: 'You need to switch networks to bridge from this chain.',
       };
     }
+    // Show transaction status when polling
+    if (isPolling && txStatus) {
+      return {
+        type: 'info',
+        message: getStatusMessage(txStatus),
+      };
+    }
     return null;
-  }, [isConnected, hasSufficientBalance, amount, balance, fromToken, quoteError, isQuoteFetched, quote, isLoadingQuote, isWrongNetwork, fromChainId]);
+  }, [isConnected, hasSufficientBalance, amount, balance, fromToken, routeError, isRoutesFetched, routes, isLoadingRoutes, isWrongNetwork, fromChainId, lastError, executionStatus.status, canRetry, isPolling, txStatus]);
 
   return (
     <div className="w-full max-w-md mx-auto space-y-4 px-4 sm:px-0">
@@ -202,10 +276,10 @@ export function BridgeWidget() {
         className="bg-dark-800/80 border border-dark-400/30 rounded-2xl p-5 sm:p-6"
       >
         <div className="space-y-5">
-          {/* From Section */}
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-medium text-white/50">From</span>
+          {/* Header with Slippage Settings */}
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-medium text-white/50">From</span>
+            <div className="flex items-center gap-2">
               {balance && fromToken && (
                 <span className={cn(
                   'text-xs',
@@ -216,54 +290,56 @@ export function BridgeWidget() {
                   Balance: {formatAmount(balance.formatted)} {fromToken.symbol}
                 </span>
               )}
+              <SlippageSettings slippage={slippage} onSlippageChange={setSlippage} />
             </div>
-            
-            <div className="grid grid-cols-2 gap-3">
-              <ChainSelector
-                selectedChainId={fromChainId}
-                selectedChainKey={fromChainKey}
-                onSelect={(chainId, chainKey) => {
-                  setFromChainId(chainId);
-                  setFromChainKey(chainKey || null);
-                }}
-              />
-              <TokenSelector
-                chainId={fromChainId}
-                selectedToken={fromToken}
-                onSelect={setFromToken}
-              />
-            </div>
+          </div>
+          
+          {/* Chain & Token Selection */}
+          <div className="grid grid-cols-2 gap-3">
+            <ChainSelector
+              selectedChainId={fromChainId}
+              selectedChainKey={fromChainKey}
+              onSelect={(chainId, chainKey) => {
+                setFromChainId(chainId);
+                setFromChainKey(chainKey || null);
+              }}
+            />
+            <TokenSelector
+              chainId={fromChainId}
+              selectedToken={fromToken}
+              onSelect={setFromToken}
+            />
+          </div>
 
-            {/* Amount Input */}
-            <div className="relative">
-              <input
-                type="number"
-                inputMode="decimal"
-                placeholder="0.0"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                disabled={!fromToken}
-                className={cn(
-                  'w-full bg-dark-700 border rounded-xl px-4 py-4 pr-16',
-                  'text-xl sm:text-2xl font-semibold text-white placeholder-white/20',
-                  'focus:outline-none',
-                  'disabled:opacity-50 disabled:cursor-not-allowed',
-                  'transition-colors duration-200',
-                  !hasSufficientBalance && amount && parseFloat(amount) > 0
-                    ? 'border-red-500/50 focus:border-red-500'
-                    : 'border-dark-400/30 focus:border-accent/40'
-                )}
-              />
-              {balance && fromToken && (
-                <button
-                  onClick={handleMax}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 px-2.5 py-1 text-xs font-semibold 
-                             text-accent bg-accent/10 hover:bg-accent/20 rounded-lg transition-colors"
-                >
-                  MAX
-                </button>
+          {/* Amount Input */}
+          <div className="relative">
+            <input
+              type="number"
+              inputMode="decimal"
+              placeholder="0.0"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              disabled={!fromToken}
+              className={cn(
+                'w-full bg-dark-700 border rounded-xl px-4 py-4 pr-16',
+                'text-xl sm:text-2xl font-semibold text-white placeholder-white/20',
+                'focus:outline-none',
+                'disabled:opacity-50 disabled:cursor-not-allowed',
+                'transition-colors duration-200',
+                !hasSufficientBalance && amount && parseFloat(amount) > 0
+                  ? 'border-red-500/50 focus:border-red-500'
+                  : 'border-dark-400/30 focus:border-accent/40'
               )}
-            </div>
+            />
+            {balance && fromToken && (
+              <button
+                onClick={handleMax}
+                className="absolute right-3 top-1/2 -translate-y-1/2 px-2.5 py-1 text-xs font-semibold 
+                           text-accent bg-accent/10 hover:bg-accent/20 rounded-lg transition-colors"
+              >
+                MAX
+              </button>
+            )}
           </div>
 
           {/* Arrow Divider */}
@@ -353,16 +429,52 @@ export function BridgeWidget() {
                 animate={{ opacity: 1, y: 0, height: 'auto' }}
                 exit={{ opacity: 0, y: -10, height: 0 }}
                 className={cn(
-                  'flex items-start gap-2 p-3 rounded-xl text-sm',
-                  statusMessage.type === 'error' && 'bg-red-500/10 border border-red-500/20 text-red-400',
-                  statusMessage.type === 'warning' && 'bg-yellow-500/10 border border-yellow-500/20 text-yellow-400',
-                  statusMessage.type === 'info' && 'bg-blue-500/10 border border-blue-500/20 text-blue-400'
+                  'p-3 rounded-xl text-sm',
+                  statusMessage.type === 'error' && 'bg-red-500/10 border border-red-500/20',
+                  statusMessage.type === 'warning' && 'bg-yellow-500/10 border border-yellow-500/20',
+                  statusMessage.type === 'info' && 'bg-blue-500/10 border border-blue-500/20'
                 )}
               >
-                {statusMessage.type === 'error' && <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />}
-                {statusMessage.type === 'warning' && <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />}
-                {statusMessage.type === 'info' && <Info className="w-4 h-4 mt-0.5 flex-shrink-0" />}
-                <span>{statusMessage.message}</span>
+                <div className="flex items-start gap-2">
+                  {statusMessage.type === 'error' && <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0 text-red-400" />}
+                  {statusMessage.type === 'warning' && <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0 text-yellow-400" />}
+                  {statusMessage.type === 'info' && <Info className="w-4 h-4 mt-0.5 flex-shrink-0 text-blue-400" />}
+                  <div className="flex-1">
+                    {statusMessage.title && (
+                      <p className={cn(
+                        'font-medium mb-0.5',
+                        {
+                          'text-red-400': statusMessage.type === 'error',
+                          'text-yellow-400': statusMessage.type === 'warning',
+                          'text-blue-400': statusMessage.type === 'info',
+                        }
+                      )}>
+                        {statusMessage.title}
+                      </p>
+                    )}
+                    <p className={cn({
+                      'text-red-400/80': statusMessage.type === 'error',
+                      'text-yellow-400/80': statusMessage.type === 'warning',
+                      'text-blue-400/80': statusMessage.type === 'info',
+                    })}>
+                      {statusMessage.message}
+                    </p>
+                    {statusMessage.action && (
+                      <p className="text-white/50 mt-1 text-xs">
+                        {statusMessage.action}
+                      </p>
+                    )}
+                  </div>
+                </div>
+                {statusMessage.canRetry && (
+                  <button
+                    onClick={handleRetry}
+                    className="mt-2 w-full flex items-center justify-center gap-2 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-lg transition-colors"
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                    Retry ({retryCount}/{maxRetries})
+                  </button>
+                )}
               </motion.div>
             )}
           </AnimatePresence>
@@ -386,30 +498,45 @@ export function BridgeWidget() {
         </div>
       </motion.div>
 
-      {/* Quote Display */}
-      {(isLoadingQuote || quote) && (
+      {/* Route Options - Shows multiple routes for comparison */}
+      {(isLoadingRoutes || (routes && routes.length > 0)) && (
+        <RouteOptions
+          routes={routes || []}
+          selectedRoute={selectedRoute}
+          onSelectRoute={setSelectedRoute}
+          isLoading={isLoadingRoutes}
+        />
+      )}
+
+      {/* Quote Display - Shows selected route details */}
+      {selectedRoute && !isLoadingRoutes && (
         <QuoteCard
-          quote={quote || null}
-          isLoading={isLoadingQuote}
-          error={quoteError?.message}
+          quote={selectedRoute}
+          isLoading={false}
+          error={undefined}
         />
       )}
 
       {/* Execution Progress */}
       <ExecutionProgress
         status={executionStatus}
+        steps={selectedRoute?.steps}
+        stepStatuses={stepExecutions}
         onClose={() => {
           resetExecution();
           if (executionStatus.status === 'completed') {
             setAmount('');
+            setSelectedRoute(null);
+            refetchRoutes();
           }
         }}
+        onRetry={canRetry ? handleRetry : undefined}
       />
 
       {/* Deposit Modal */}
-      {showDepositModal && quote && (
+      {showDepositModal && selectedRoute && (
         <DepositToHyperliquid
-          amount={formatAmount(Number(quote.toAmount) / Math.pow(10, quote.toToken.decimals), 2)}
+          amount={formatAmount(Number(selectedRoute.toAmount) / Math.pow(10, selectedRoute.toToken.decimals), 2)}
           isOpen={showDepositModal}
           onClose={() => setShowDepositModal(false)}
           onSuccess={() => {

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { motion } from 'motion/react';
 import { ChevronDown, Search, Check } from 'lucide-react';
 import { cn } from '../../lib/utils';
-import { selectorChains } from '../../config/chains';
+import { sourceSelectorChains, type ChainEntry } from '../../config/chains';
 import { getTokensForChain, type Token } from '../../config/tokens';
 import { Modal } from '../ui/Modal';
 
@@ -12,18 +12,22 @@ interface ChainSelectorProps {
   onSelect: (chainId: number, chainKey?: string) => void;
   label?: string;
   disabled?: boolean;
+  chains?: ChainEntry[]; // Optional: override available chains
 }
 
-export function ChainSelector({ selectedChainId, selectedChainKey, onSelect, label, disabled }: ChainSelectorProps) {
+export function ChainSelector({ selectedChainId, selectedChainKey, onSelect, label, disabled, chains }: ChainSelectorProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
+  // Use provided chains or default to source chains (excludes Hyperliquid)
+  const availableChains = chains || sourceSelectorChains;
+
   // Find selected chain by key (for testnet distinction) or by id
   const selectedChain = selectedChainKey 
-    ? selectorChains.find(c => c.key === selectedChainKey)
-    : selectorChains.find(c => c.id === selectedChainId && !c.isTestnet);
+    ? availableChains.find(c => c.key === selectedChainKey)
+    : availableChains.find(c => c.id === selectedChainId && !c.isTestnet);
   
-  const filteredChains = selectorChains.filter((chain) => 
+  const filteredChains = availableChains.filter((chain) => 
     chain.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     chain.shortName.toLowerCase().includes(searchQuery.toLowerCase())
   );
