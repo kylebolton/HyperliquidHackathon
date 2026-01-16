@@ -1,4 +1,4 @@
-import { createConfig, getQuote, getRoutes, executeRoute, getStatus, type Route, type RoutesRequest, type QuoteRequest, type GetStatusRequest } from '@lifi/sdk';
+import { createConfig, getQuote, getRoutes, executeRoute, getStatus, getChains, getTokens, type Route, type RoutesRequest, type QuoteRequest, type GetStatusRequest, type ExtendedChain, type Token as LiFiToken } from '@lifi/sdk';
 import type { Quote, RouteStep } from '../types';
 import { HYPERLIQUID_CHAIN_ID, SONIC_CHAIN_ID } from '../config/chains';
 
@@ -11,6 +11,106 @@ const lifiConfig = createConfig({
 });
 
 export { lifiConfig };
+
+// Cache for discovered chain ID and tokens
+let cachedHyperliquidChainId: number | null = null;
+let cachedLiFiChains: ExtendedChain[] | null = null;
+let cachedHyperliquidTokens: LiFiToken[] | null = null;
+
+// Discover the correct Hyperliquid chain ID from LI.FI
+export async function discoverHyperliquidChainId(): Promise<number> {
+  if (cachedHyperliquidChainId !== null) {
+    return cachedHyperliquidChainId;
+  }
+
+  try {
+    const chains = await getChains();
+    cachedLiFiChains = chains;
+    
+    // Log all available chains for debugging
+    console.log('[LI.FI] Available chains:', chains.map(c => ({ id: c.id, name: c.name, key: c.key })));
+    
+    // Find Hyperliquid by various possible names/keys
+    const hyperliquid = chains.find(c => 
+      c.name.toLowerCase().includes('hyperliquid') || 
+      c.name.toLowerCase().includes('hyperevm') ||
+      c.key?.toLowerCase().includes('hyp') ||
+      c.key?.toLowerCase() === 'hpl' ||
+      c.id === HYPERLIQUID_CHAIN_ID ||
+      c.id === 999 // Also check 999 as possible ID
+    );
+    
+    if (hyperliquid) {
+      console.log('[LI.FI] Found Hyperliquid chain:', hyperliquid);
+      cachedHyperliquidChainId = hyperliquid.id;
+      return hyperliquid.id;
+    }
+    
+    // Fallback to configured ID
+    console.warn('[LI.FI] Hyperliquid not found in LI.FI chains, using configured ID:', HYPERLIQUID_CHAIN_ID);
+    cachedHyperliquidChainId = HYPERLIQUID_CHAIN_ID;
+    return HYPERLIQUID_CHAIN_ID;
+  } catch (error) {
+    console.error('[LI.FI] Error discovering chains:', error);
+    cachedHyperliquidChainId = HYPERLIQUID_CHAIN_ID;
+    return HYPERLIQUID_CHAIN_ID;
+  }
+}
+
+// Get tokens available on Hyperliquid from LI.FI
+export async function getHyperliquidTokens(): Promise<LiFiToken[]> {
+  if (cachedHyperliquidTokens !== null) {
+    return cachedHyperliquidTokens;
+  }
+
+  try {
+    const chainId = await discoverHyperliquidChainId();
+    const result = await getTokens({ chains: [chainId] });
+    const tokens = result.tokens[chainId] || [];
+    
+    console.log('[LI.FI] Hyperliquid tokens:', tokens.map(t => ({ 
+      symbol: t.symbol, 
+      address: t.address,
+      decimals: t.decimals 
+    })));
+    
+    cachedHyperliquidTokens = tokens;
+    return tokens;
+  } catch (error) {
+    console.error('[LI.FI] Error fetching Hyperliquid tokens:', error);
+    return [];
+  }
+}
+
+// Find the correct token address on Hyperliquid by symbol
+export async function findHyperliquidTokenAddress(symbol: string): Promise<string | null> {
+  const tokens = await getHyperliquidTokens();
+  const token = tokens.find(t => t.symbol.toUpperCase() === symbol.toUpperCase());
+  
+  if (token) {
+    console.log(`[LI.FI] Found ${symbol} on Hyperliquid:`, token.address);
+    return token.address;
+  }
+  
+  console.warn(`[LI.FI] Token ${symbol} not found on Hyperliquid`);
+  return null;
+}
+
+// Get all LI.FI supported chains
+export async function getLiFiChains(): Promise<ExtendedChain[]> {
+  if (cachedLiFiChains !== null) {
+    return cachedLiFiChains;
+  }
+
+  try {
+    const chains = await getChains();
+    cachedLiFiChains = chains;
+    return chains;
+  } catch (error) {
+    console.error('[LI.FI] Error fetching chains:', error);
+    return [];
+  }
+}
 
 // Convert LI.FI route to our Quote format
 function convertToQuote(route: Route): Quote {
@@ -81,17 +181,31 @@ export async function fetchQuote(
   slippage: number = 0.5
 ): Promise<Quote | null> {
   try {
+    // Discover the correct Hyperliquid chain ID from LI.FI
+    const toChainId = await discoverHyperliquidChainId();
+    
+    // Try to resolve destination token address if it looks like our hardcoded one
+    let resolvedToTokenAddress = toTokenAddress;
+    if (toTokenAddress.toLowerCase() === '0xeb62eee3685fc4c43992febcd9e75443aef550ab') {
+      const lifiUsdcAddress = await findHyperliquidTokenAddress('USDC');
+      if (lifiUsdcAddress) {
+        resolvedToTokenAddress = lifiUsdcAddress;
+      }
+    }
+    
     const quoteRequest: QuoteRequest = {
       fromChain: fromChainId,
-      toChain: HYPERLIQUID_CHAIN_ID,
+      toChain: toChainId,
       fromToken: fromTokenAddress,
-      toToken: toTokenAddress,
+      toToken: resolvedToTokenAddress,
       fromAmount: fromAmount,
       fromAddress: fromAddress,
       slippage: slippage / 100, // Convert percentage to decimal
     };
 
+    console.log('[LI.FI] Fetching quote with params:', quoteRequest);
     const quote = await getQuote(quoteRequest);
+    console.log('[LI.FI] Quote received:', quote);
     
     // Create a minimal route-like structure from the quote
     const quoteAsRoute = {
@@ -170,7 +284,10 @@ export async function fetchQuote(
 
     return result;
   } catch (error) {
-    console.error('Error fetching quote:', error);
+    console.error('[LI.FI] Error fetching quote:', {
+      error,
+      params: { fromChainId, fromTokenAddress, toTokenAddress, fromAmount, fromAddress, slippage }
+    });
     return null;
   }
 }
@@ -185,11 +302,24 @@ export async function fetchRoutes(
   slippage: number = 0.5
 ): Promise<Quote[]> {
   try {
+    // Discover the correct Hyperliquid chain ID from LI.FI
+    const toChainId = await discoverHyperliquidChainId();
+    
+    // Try to resolve destination token address if it looks like our hardcoded one
+    let resolvedToTokenAddress = toTokenAddress;
+    if (toTokenAddress.toLowerCase() === '0xeb62eee3685fc4c43992febcd9e75443aef550ab') {
+      const lifiUsdcAddress = await findHyperliquidTokenAddress('USDC');
+      if (lifiUsdcAddress) {
+        resolvedToTokenAddress = lifiUsdcAddress;
+        console.log('[LI.FI] Resolved USDC address from LI.FI:', resolvedToTokenAddress);
+      }
+    }
+    
     const routesRequest: RoutesRequest = {
       fromChainId,
-      toChainId: HYPERLIQUID_CHAIN_ID,
+      toChainId,
       fromTokenAddress,
-      toTokenAddress,
+      toTokenAddress: resolvedToTokenAddress,
       fromAmount,
       fromAddress,
       options: {
@@ -198,10 +328,40 @@ export async function fetchRoutes(
       },
     };
 
+    console.log('[LI.FI] Fetching routes with params:', {
+      ...routesRequest,
+      configuredHyperliquidId: HYPERLIQUID_CHAIN_ID,
+      discoveredHyperliquidId: toChainId,
+    });
+    
     const result = await getRoutes(routesRequest);
+    
+    console.log('[LI.FI] Routes response:', {
+      routesFound: result.routes.length,
+      routes: result.routes.map(r => ({
+        id: r.id,
+        fromChain: r.fromChainId,
+        toChain: r.toChainId,
+        steps: r.steps.map(s => s.tool),
+      }))
+    });
+    
+    if (result.routes.length === 0) {
+      console.warn('[LI.FI] No routes found. Check if:', {
+        fromChainSupported: `Chain ${fromChainId} is supported by LI.FI`,
+        toChainSupported: `Chain ${toChainId} (Hyperliquid) is supported by LI.FI`,
+        tokensSupported: 'Both tokens exist on respective chains',
+        amountSufficient: 'Amount is not too small for bridging',
+      });
+    }
+    
     return result.routes.map(convertToQuote);
   } catch (error) {
-    console.error('Error fetching routes:', error);
+    console.error('[LI.FI] Error fetching routes:', {
+      error,
+      errorMessage: error instanceof Error ? error.message : 'Unknown error',
+      params: { fromChainId, fromTokenAddress, toTokenAddress, fromAmount, fromAddress, slippage }
+    });
     return [];
   }
 }
@@ -245,9 +405,16 @@ export async function executeBridgeRoute(
 
 // Get supported chains from LI.FI
 export async function getSupportedChains(): Promise<number[]> {
-  // LI.FI supports most major EVM chains
-  // For now, return our predefined list that includes Hyperliquid and Sonic
-  return [1, 10, 42161, 137, 8453, 56, 43114, SONIC_CHAIN_ID, HYPERLIQUID_CHAIN_ID];
+  try {
+    const chains = await getLiFiChains();
+    const chainIds = chains.map(c => c.id);
+    console.log('[LI.FI] Supported chains:', chainIds.length, 'chains');
+    return chainIds;
+  } catch (error) {
+    console.error('[LI.FI] Error getting supported chains:', error);
+    // Fallback to predefined list
+    return [1, 10, 42161, 137, 8453, 56, 43114, SONIC_CHAIN_ID, HYPERLIQUID_CHAIN_ID];
+  }
 }
 
 // Check if a route to Hyperliquid is possible
@@ -301,13 +468,15 @@ export interface TransactionStatus {
 export async function getTransactionStatus(
   txHash: string,
   fromChainId: number,
-  toChainId: number = HYPERLIQUID_CHAIN_ID
+  toChainId?: number
 ): Promise<TransactionStatus> {
+  // Use provided toChainId or discover Hyperliquid chain ID
+  const resolvedToChainId = toChainId || await discoverHyperliquidChainId();
   try {
     const statusRequest: GetStatusRequest = {
       txHash,
       fromChain: fromChainId,
-      toChain: toChainId,
+      toChain: resolvedToChainId,
     };
 
     const result = await getStatus(statusRequest);
