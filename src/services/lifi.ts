@@ -3,6 +3,8 @@ import type { Quote, RouteStep } from '../types';
 import { HYPERLIQUID_CHAIN_ID, SONIC_CHAIN_ID } from '../config/chains';
 
 // Initialize LI.FI SDK
+// LI.FI natively supports Sonic (146) and most major EVM chains
+// Custom RPC URLs for Hyperliquid are configured in wagmi.ts
 const lifiConfig = createConfig({
   integrator: 'liquyn-swap',
   // apiKey: import.meta.env.VITE_LIFI_API_KEY, // Optional: Add for higher rate limits

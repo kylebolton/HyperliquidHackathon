@@ -1,15 +1,21 @@
 # Liquyn Swap
 
-A minimal, mobile-first bridge dApp for swapping and bridging from any chain to HyperEVM. Built for the Hyperliquid Hackathon.
+A minimal, mobile-first bridge dApp for swapping and bridging from any chain to Hyperliquid. Built for the Hyperliquid Hackathon.
 
+**Live Demo:** https://liquyn-swap.vercel.app/  
 **Repository:** https://github.com/kylebolton/HyperliquidHackathon
 
 ## Features
 
-- Cross-chain bridging to HyperEVM via LI.FI
-- Mobile-first responsive design
-- Auto-deposit to Hyperliquid L1 trading account
-- Reusable `<DepositToHyperliquid />` component
+- 🌉 Cross-chain bridging to Hyperliquid via LI.FI
+- 📱 Mobile-first responsive design
+- 💰 Auto-deposit to Hyperliquid L1 trading account
+- 🔄 Multiple route comparison (fastest, cheapest, recommended)
+- ⚙️ Configurable slippage settings
+- 🔁 Automatic retry for failed transactions
+- 📊 Real-time transaction status tracking
+- 🎨 Subtle Three.js network visualization background
+- ♻️ Reusable `<DepositToHyperliquid />` component
 
 ## Quick Start
 
@@ -22,11 +28,13 @@ npm run dev
 
 ## Tech Stack
 
-- React + TypeScript + Vite
-- Tailwind CSS
-- RainbowKit + wagmi
+- React 18 + TypeScript + Vite
+- Tailwind CSS v3
+- RainbowKit + wagmi v2 + viem
 - LI.FI SDK
-- Motion
+- Motion (framer-motion)
+- Three.js
+- TanStack Query
 
 ## Reusable Component
 
@@ -41,9 +49,27 @@ import { DepositToHyperliquid } from './components/deposit/DepositToHyperliquid'
 />
 ```
 
-## Supported Chains
+## Supported Source Chains
 
-- Ethereum, Arbitrum, Optimism, Polygon, Base, BNB Chain, Avalanche → HyperEVM (998)
+| Chain | ID | Native Token |
+|-------|-----|--------------|
+| Ethereum | 1 | ETH |
+| Arbitrum | 42161 | ETH |
+| Optimism | 10 | ETH |
+| Polygon | 137 | MATIC |
+| Base | 8453 | ETH |
+| BNB Chain | 56 | BNB |
+| Avalanche | 43114 | AVAX |
+| **Sonic** | **146** | **S** |
+
+→ All bridging to **Hyperliquid** (Chain ID: 998)
+
+## LI.FI Integration
+
+Sonic and all other source chains are fully integrated with LI.FI for:
+- Cross-chain bridging (Relay, StargateV2, Symbiosis, etc.)
+- DEX aggregation (KyberSwap, OpenOcean, Sushiswap, etc.)
+- Optimal route finding and gas estimation
 
 ## License
 
