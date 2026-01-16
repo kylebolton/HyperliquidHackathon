@@ -2,6 +2,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { X } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useEffect } from 'react';
+import { createPortal } from 'react-dom';
 
 interface ModalProps {
   isOpen: boolean;
@@ -24,7 +25,7 @@ export function Modal({ isOpen, onClose, title, children, className }: ModalProp
     };
   }, [isOpen]);
 
-  return (
+  const modalContent = (
     <AnimatePresence>
       {isOpen && (
         <>
@@ -35,7 +36,7 @@ export function Modal({ isOpen, onClose, title, children, className }: ModalProp
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
             onClick={onClose}
-            className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50"
+            className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[100]"
           />
           
           {/* Centered Modal */}
@@ -45,9 +46,11 @@ export function Modal({ isOpen, onClose, title, children, className }: ModalProp
             exit={{ opacity: 0, scale: 0.95 }}
             transition={{ type: 'spring', damping: 25, stiffness: 300 }}
             className={cn(
-              'fixed z-50',
-              // Center on all screen sizes
-              'left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2',
+              'fixed z-[101]',
+              // Center on all screen sizes using inset + margin auto
+              'inset-0 m-auto',
+              // Height should be auto, not fill container
+              'h-fit',
               // Width constraints
               'w-[calc(100%-32px)] max-w-md',
               // Styling
@@ -81,4 +84,11 @@ export function Modal({ isOpen, onClose, title, children, className }: ModalProp
       )}
     </AnimatePresence>
   );
+
+  // Use portal to render at document body level to avoid transform ancestor issues
+  if (typeof document !== 'undefined') {
+    return createPortal(modalContent, document.body);
+  }
+  
+  return modalContent;
 }

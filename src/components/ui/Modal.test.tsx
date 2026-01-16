@@ -48,8 +48,8 @@ describe('Modal', () => {
       </Modal>
     );
 
-    // Should have centering classes
-    const modalContainer = screen.getByText('Test Modal').closest('[class*="translate"]');
+    // Should have centering classes (inset-0 m-auto)
+    const modalContainer = screen.getByText('Test Modal').closest('[class*="inset-0"]');
     expect(modalContainer).toBeInTheDocument();
   });
 
