@@ -6,13 +6,13 @@ interface LayoutProps {
 
 export function Layout({ children }: LayoutProps) {
   return (
-    <div className="min-h-screen bg-dark-950 relative overflow-x-hidden">
-      {/* Subtle gradient background */}
-      <div className="fixed inset-0 pointer-events-none">
-        {/* Top gradient */}
+    <div className="min-h-screen relative overflow-x-hidden">
+      {/* Subtle overlay gradients - transparent to let Three.js show */}
+      <div className="fixed inset-0 pointer-events-none z-[1]">
+        {/* Top gradient glow */}
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[400px] bg-accent/[0.03] rounded-full blur-[100px]" />
         
-        {/* Subtle grid */}
+        {/* Subtle grid overlay */}
         <div 
           className="absolute inset-0 opacity-[0.015]"
           style={{

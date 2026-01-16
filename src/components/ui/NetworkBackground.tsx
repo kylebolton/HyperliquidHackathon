@@ -215,11 +215,12 @@ export function NetworkBackground() {
   return (
     <div 
       ref={containerRef} 
-      className="fixed inset-0 z-0 pointer-events-none"
+      className="fixed inset-0 pointer-events-none"
       style={{ 
-        opacity: 0.4,
-        maskImage: 'radial-gradient(ellipse 60% 60% at 50% 50%, black 20%, transparent 70%)',
-        WebkitMaskImage: 'radial-gradient(ellipse 60% 60% at 50% 50%, black 20%, transparent 70%)',
+        zIndex: 0,
+        opacity: 0.5,
+        maskImage: 'radial-gradient(ellipse 70% 70% at 50% 50%, black 30%, transparent 80%)',
+        WebkitMaskImage: 'radial-gradient(ellipse 70% 70% at 50% 50%, black 30%, transparent 80%)',
       }}
     />
   );
