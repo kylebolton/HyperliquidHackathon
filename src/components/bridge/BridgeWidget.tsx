@@ -1,8 +1,8 @@
 import { useState, useEffect, useMemo } from 'react';
-import { motion } from 'motion/react';
-import { useAccount, useBalance } from 'wagmi';
+import { motion, AnimatePresence } from 'motion/react';
+import { useAccount, useBalance, useSwitchChain } from 'wagmi';
 import { parseUnits } from 'viem';
-import { ArrowDown } from 'lucide-react';
+import { ArrowDown, AlertCircle, Loader2, Info } from 'lucide-react';
 import { cn, formatAmount } from '../../lib/utils';
 import { ChainSelector, TokenSelector } from './ChainTokenSelector';
 import { QuoteCard } from './QuoteCard';
@@ -14,8 +14,16 @@ import { useLiFiExecution } from '../../hooks/useLiFiExecution';
 import { hyperliquidTokens, type Token } from '../../config/tokens';
 import { HYPERLIQUID_CHAIN_ID } from '../../config/chains';
 
+type ButtonState = {
+  text: string;
+  disabled: boolean;
+  variant: 'primary' | 'error' | 'warning';
+  showLoader?: boolean;
+};
+
 export function BridgeWidget() {
-  const { address, isConnected } = useAccount();
+  const { address, isConnected, chainId: connectedChainId } = useAccount();
+  const { switchChain } = useSwitchChain();
   
   // Bridge state
   const [fromChainId, setFromChainId] = useState<number | null>(null);
@@ -26,7 +34,7 @@ export function BridgeWidget() {
   const [showDepositModal, setShowDepositModal] = useState(false);
 
   // Get balance for selected token
-  const { data: balance } = useBalance({
+  const { data: balance, isLoading: isBalanceLoading } = useBalance({
     address,
     token: fromToken?.address === '0x0000000000000000000000000000000000000000' 
       ? undefined 
@@ -44,21 +52,31 @@ export function BridgeWidget() {
     }
   }, [amount, fromToken]);
 
+  // Check if user has sufficient balance
+  const hasSufficientBalance = useMemo(() => {
+    if (!balance || !amount || parseFloat(amount) <= 0) return true; // Don't show error if no amount
+    return parseFloat(balance.formatted) >= parseFloat(amount);
+  }, [balance, amount]);
+
   // Get quote
   const { 
     data: quote, 
     isLoading: isLoadingQuote, 
-    error: quoteError 
+    error: quoteError,
+    isFetched: isQuoteFetched,
   } = useLiFiQuote({
     fromChainId,
     fromTokenAddress: fromToken?.address || null,
     toTokenAddress: toToken.address,
     amount: amountInUnits,
-    enabled: !!fromChainId && !!fromToken && !!amount && parseFloat(amount) > 0,
+    enabled: !!fromChainId && !!fromToken && !!amount && parseFloat(amount) > 0 && hasSufficientBalance,
   });
 
   // Execution
   const { status: executionStatus, execute, reset: resetExecution, isExecuting } = useLiFiExecution();
+
+  // Check if on wrong network
+  const isWrongNetwork = fromChainId && connectedChainId !== fromChainId;
 
   // Reset token when chain changes
   useEffect(() => {
@@ -66,8 +84,57 @@ export function BridgeWidget() {
     setAmount('');
   }, [fromChainId]);
 
-  // Handle bridge execution
+  // Determine button state with detailed feedback
+  const buttonState: ButtonState = useMemo(() => {
+    if (!isConnected) {
+      return { text: 'Connect Wallet', disabled: true, variant: 'primary' };
+    }
+    if (!fromChainId) {
+      return { text: 'Select Source Chain', disabled: true, variant: 'primary' };
+    }
+    if (!fromToken) {
+      return { text: 'Select Token', disabled: true, variant: 'primary' };
+    }
+    if (!amount || parseFloat(amount) <= 0) {
+      return { text: 'Enter Amount', disabled: true, variant: 'primary' };
+    }
+    if (isBalanceLoading) {
+      return { text: 'Checking Balance...', disabled: true, variant: 'primary', showLoader: true };
+    }
+    if (!hasSufficientBalance) {
+      return { text: 'Insufficient Balance', disabled: true, variant: 'error' };
+    }
+    if (isWrongNetwork) {
+      return { text: `Switch to ${fromToken.chainId === 1 ? 'Ethereum' : 'Source Chain'}`, disabled: false, variant: 'warning' };
+    }
+    if (isLoadingQuote) {
+      return { text: 'Finding Best Route...', disabled: true, variant: 'primary', showLoader: true };
+    }
+    if (quoteError) {
+      return { text: 'No Route Available', disabled: true, variant: 'error' };
+    }
+    if (isQuoteFetched && !quote) {
+      return { text: 'No Route Found', disabled: true, variant: 'error' };
+    }
+    if (isExecuting) {
+      return { text: 'Bridging...', disabled: true, variant: 'primary', showLoader: true };
+    }
+    if (quote) {
+      return { text: 'Bridge to Hyperliquid', disabled: false, variant: 'primary' };
+    }
+    return { text: 'Bridge to Hyperliquid', disabled: true, variant: 'primary' };
+  }, [
+    isConnected, fromChainId, fromToken, amount, isBalanceLoading, 
+    hasSufficientBalance, isWrongNetwork, isLoadingQuote, quoteError,
+    isQuoteFetched, quote, isExecuting
+  ]);
+
+  // Handle bridge execution or network switch
   const handleBridge = async () => {
+    if (isWrongNetwork && fromChainId) {
+      switchChain?.({ chainId: fromChainId as 1 | 10 | 42161 | 137 | 8453 | 56 | 43114 | 998 });
+      return;
+    }
     if (!quote) return;
     
     const success = await execute(quote);
@@ -88,7 +155,37 @@ export function BridgeWidget() {
     }
   };
 
-  const canBridge = isConnected && quote && !isExecuting && parseFloat(amount) > 0;
+  // Generate detailed error/info message
+  const statusMessage = useMemo(() => {
+    if (!isConnected) return null;
+    if (!hasSufficientBalance && amount && parseFloat(amount) > 0) {
+      const needed = parseFloat(amount);
+      const have = balance ? parseFloat(balance.formatted) : 0;
+      return {
+        type: 'error' as const,
+        message: `You need ${formatAmount(needed.toString(), 4)} ${fromToken?.symbol} but only have ${formatAmount(have.toString(), 4)}`,
+      };
+    }
+    if (quoteError) {
+      return {
+        type: 'error' as const,
+        message: quoteError.message || 'Failed to find a route. Try a different amount or token.',
+      };
+    }
+    if (isQuoteFetched && !quote && !isLoadingQuote && amount && parseFloat(amount) > 0 && hasSufficientBalance) {
+      return {
+        type: 'warning' as const,
+        message: 'No bridge route found for this pair. Try a larger amount or different token.',
+      };
+    }
+    if (isWrongNetwork && fromChainId) {
+      return {
+        type: 'info' as const,
+        message: 'You need to switch networks to bridge from this chain.',
+      };
+    }
+    return null;
+  }, [isConnected, hasSufficientBalance, amount, balance, fromToken, quoteError, isQuoteFetched, quote, isLoadingQuote, isWrongNetwork, fromChainId]);
 
   return (
     <div className="w-full max-w-md mx-auto space-y-4 px-4 sm:px-0">
@@ -104,7 +201,12 @@ export function BridgeWidget() {
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium text-white/50">From</span>
               {balance && fromToken && (
-                <span className="text-xs text-white/30">
+                <span className={cn(
+                  'text-xs',
+                  !hasSufficientBalance && amount && parseFloat(amount) > 0 
+                    ? 'text-red-400' 
+                    : 'text-white/30'
+                )}>
                   Balance: {formatAmount(balance.formatted)} {fromToken.symbol}
                 </span>
               )}
@@ -132,11 +234,14 @@ export function BridgeWidget() {
                 onChange={(e) => setAmount(e.target.value)}
                 disabled={!fromToken}
                 className={cn(
-                  'w-full bg-dark-700 border border-dark-400/30 rounded-xl px-4 py-4 pr-16',
+                  'w-full bg-dark-700 border rounded-xl px-4 py-4 pr-16',
                   'text-xl sm:text-2xl font-semibold text-white placeholder-white/20',
-                  'focus:outline-none focus:border-accent/40',
+                  'focus:outline-none',
                   'disabled:opacity-50 disabled:cursor-not-allowed',
-                  'transition-colors duration-200'
+                  'transition-colors duration-200',
+                  !hasSufficientBalance && amount && parseFloat(amount) > 0
+                    ? 'border-red-500/50 focus:border-red-500'
+                    : 'border-dark-400/30 focus:border-accent/40'
                 )}
               />
               {balance && fromToken && (
@@ -230,27 +335,43 @@ export function BridgeWidget() {
             </div>
           )}
 
+          {/* Status/Error Message */}
+          <AnimatePresence mode="wait">
+            {statusMessage && (
+              <motion.div
+                initial={{ opacity: 0, y: -10, height: 0 }}
+                animate={{ opacity: 1, y: 0, height: 'auto' }}
+                exit={{ opacity: 0, y: -10, height: 0 }}
+                className={cn(
+                  'flex items-start gap-2 p-3 rounded-xl text-sm',
+                  statusMessage.type === 'error' && 'bg-red-500/10 border border-red-500/20 text-red-400',
+                  statusMessage.type === 'warning' && 'bg-yellow-500/10 border border-yellow-500/20 text-yellow-400',
+                  statusMessage.type === 'info' && 'bg-blue-500/10 border border-blue-500/20 text-blue-400'
+                )}
+              >
+                {statusMessage.type === 'error' && <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />}
+                {statusMessage.type === 'warning' && <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />}
+                {statusMessage.type === 'info' && <Info className="w-4 h-4 mt-0.5 flex-shrink-0" />}
+                <span>{statusMessage.message}</span>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
           {/* Bridge Button */}
           <Button
             onClick={handleBridge}
-            disabled={!canBridge}
-            isLoading={isExecuting}
-            className="w-full"
+            disabled={buttonState.disabled}
+            className={cn(
+              'w-full',
+              buttonState.variant === 'error' && 'bg-red-500/20 border-red-500/30 text-red-400 hover:bg-red-500/30',
+              buttonState.variant === 'warning' && 'bg-yellow-500/20 border-yellow-500/30 text-yellow-400 hover:bg-yellow-500/30'
+            )}
             size="lg"
           >
-            {!isConnected
-              ? 'Connect Wallet'
-              : !fromChainId
-              ? 'Select Chain'
-              : !fromToken
-              ? 'Select Token'
-              : !amount || parseFloat(amount) <= 0
-              ? 'Enter Amount'
-              : isLoadingQuote
-              ? 'Finding Route...'
-              : isExecuting
-              ? 'Bridging...'
-              : 'Bridge to Hyperliquid'}
+            <span className="flex items-center justify-center gap-2">
+              {buttonState.showLoader && <Loader2 className="w-4 h-4 animate-spin" />}
+              {buttonState.text}
+            </span>
           </Button>
         </div>
       </motion.div>
