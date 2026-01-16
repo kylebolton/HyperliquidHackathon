@@ -172,6 +172,33 @@ export const popularTokens: Record<number, Token[]> = {
       logo: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48/logo.png',
     },
   ],
+  // Sonic
+  146: [
+    {
+      symbol: 'S',
+      name: 'Sonic',
+      decimals: 18,
+      address: NATIVE_TOKEN_ADDRESS,
+      chainId: 146,
+      logo: 'https://raw.githubusercontent.com/Fantom-foundation/brand-assets/main/sonic/S-logo.png',
+    },
+    {
+      symbol: 'USDC',
+      name: 'USD Coin',
+      decimals: 6,
+      address: '0x29219dd400f2Bf60E5a23d13Be72B486D4038894',
+      chainId: 146,
+      logo: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48/logo.png',
+    },
+    {
+      symbol: 'WETH',
+      name: 'Wrapped Ether',
+      decimals: 18,
+      address: '0x50c42dEAcD8Fc9773493ED674b675bE577f2634b',
+      chainId: 146,
+      logo: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/info/logo.png',
+    },
+  ],
 };
 
 // Hyperliquid destination tokens

@@ -5,6 +5,35 @@ import { mainnet, arbitrum, optimism, polygon, base, bsc, avalanche } from 'wagm
 export const HYPERLIQUID_CHAIN_ID = 998;
 export const HYPERLIQUID_TESTNET_CHAIN_ID = 999; // Using different ID for testnet in wallet
 
+// Sonic Chain ID
+export const SONIC_CHAIN_ID = 146;
+
+// Sonic Chain Definition with RainbowKit icon
+export const sonic = {
+  ...defineChain({
+    id: SONIC_CHAIN_ID,
+    name: 'Sonic',
+    nativeCurrency: {
+      name: 'Sonic',
+      symbol: 'S',
+      decimals: 18,
+    },
+    rpcUrls: {
+      default: {
+        http: ['https://rpc.soniclabs.com'],
+      },
+    },
+    blockExplorers: {
+      default: {
+        name: 'Sonic Explorer',
+        url: 'https://sonicscan.org',
+      },
+    },
+  }),
+  iconUrl: 'https://raw.githubusercontent.com/Fantom-foundation/brand-assets/main/sonic/S-logo.png',
+  iconBackground: '#0a0a0a',
+} as Chain & { iconUrl: string; iconBackground: string };
+
 // Hyperliquid Chain Definition (Mainnet) with RainbowKit icon
 export const hyperliquid = {
   ...defineChain({
@@ -67,6 +96,7 @@ export const sourceChains = [
   base,
   bsc,
   avalanche,
+  sonic,
 ] as const;
 
 // All supported chains including Hyperliquid
@@ -122,6 +152,12 @@ export const chainMetadata: Record<number, {
     logo: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/avalanchec/info/logo.png',
     color: '#E84142',
   },
+  [SONIC_CHAIN_ID]: {
+    name: 'Sonic',
+    shortName: 'S',
+    logo: 'https://raw.githubusercontent.com/Fantom-foundation/brand-assets/main/sonic/S-logo.png',
+    color: '#1DB4F4',
+  },
   [HYPERLIQUID_CHAIN_ID]: {
     name: 'Hyperliquid',
     shortName: 'HYPE',
@@ -157,6 +193,7 @@ export const selectorChains: ChainEntry[] = [
   { id: 8453, key: 'base', name: 'Base', shortName: 'BASE', logo: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/base/info/logo.png', color: '#0052FF' },
   { id: 56, key: 'bnb', name: 'BNB Chain', shortName: 'BNB', logo: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/binance/info/logo.png', color: '#F3BA2F' },
   { id: 43114, key: 'avax', name: 'Avalanche', shortName: 'AVAX', logo: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/avalanchec/info/logo.png', color: '#E84142' },
+  { id: SONIC_CHAIN_ID, key: 'sonic', name: 'Sonic', shortName: 'S', logo: 'https://raw.githubusercontent.com/Fantom-foundation/brand-assets/main/sonic/S-logo.png', color: '#1DB4F4' },
   { id: HYPERLIQUID_CHAIN_ID, key: 'hyperliquid', name: 'Hyperliquid', shortName: 'HYPE', logo: '/assets/green.png', color: '#4ADE80' },
   { id: HYPERLIQUID_TESTNET_CHAIN_ID, key: 'hyperliquid-testnet', name: 'Hyperliquid (Testnet)', shortName: 'HYPE-T', logo: '/assets/green.png', color: '#4ADE80', isTestnet: true, rpcUrl: 'https://rpc.hyperliquid-testnet.xyz/evm' },
 ];

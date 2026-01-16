@@ -1,6 +1,6 @@
 import { createConfig, getQuote, getRoutes, executeRoute, getStatus, type Route, type RoutesRequest, type QuoteRequest, type GetStatusRequest } from '@lifi/sdk';
 import type { Quote, RouteStep } from '../types';
-import { HYPERLIQUID_CHAIN_ID } from '../config/chains';
+import { HYPERLIQUID_CHAIN_ID, SONIC_CHAIN_ID } from '../config/chains';
 
 // Initialize LI.FI SDK
 const lifiConfig = createConfig({
@@ -244,8 +244,8 @@ export async function executeBridgeRoute(
 // Get supported chains from LI.FI
 export async function getSupportedChains(): Promise<number[]> {
   // LI.FI supports most major EVM chains
-  // For now, return our predefined list that includes Hyperliquid
-  return [1, 10, 42161, 137, 8453, 56, 43114, HYPERLIQUID_CHAIN_ID];
+  // For now, return our predefined list that includes Hyperliquid and Sonic
+  return [1, 10, 42161, 137, 8453, 56, 43114, SONIC_CHAIN_ID, HYPERLIQUID_CHAIN_ID];
 }
 
 // Check if a route to Hyperliquid is possible
