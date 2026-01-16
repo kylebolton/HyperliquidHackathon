@@ -140,7 +140,9 @@ function convertToQuote(route: Route): Quote {
     estimatedTime: step.estimate.executionDuration,
   }));
 
-  return {
+  // Store the raw route for execution - this is the actual LI.FI route object
+  // We'll use this instead of re-fetching during execution
+  const quote: Quote & { _rawRoute?: Route } = {
     id: route.id,
     fromChain: route.fromChainId,
     toChain: route.toChainId,
@@ -156,6 +158,8 @@ function convertToQuote(route: Route): Quote {
       symbol: route.toToken.symbol,
       name: route.toToken.name || route.toToken.symbol,
       decimals: route.toToken.decimals,
+      // Use a placeholder that we'll resolve during execution
+      // The actual address from LI.FI might be wrong
       address: route.toToken.address,
       chainId: route.toChainId,
       logo: route.toToken.logoURI,
@@ -167,7 +171,12 @@ function convertToQuote(route: Route): Quote {
     gasCostUSD: route.gasCostUSD || '0',
     steps,
     slippage: 0.5,
+    _rawRoute: route, // Store the raw route for direct execution
   };
+
+  console.log('[LI.FI] Converted quote - toToken address from LI.FI:', route.toToken.address);
+  
+  return quote;
 }
 
 export async function fetchQuote(

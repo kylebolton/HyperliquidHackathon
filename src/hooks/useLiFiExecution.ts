@@ -1,8 +1,10 @@
 import { useState, useCallback } from 'react';
 import { useAccount, useWalletClient } from 'wagmi';
-import { executeRoute, getRoutes, getTokens } from '@lifi/sdk';
+import { executeRoute, type Route } from '@lifi/sdk';
 import type { ExecutionStatus, Quote } from '../types';
-import { HYPERLIQUID_CHAIN_ID } from '../config/chains';
+
+// Extended Quote type that may contain raw route
+type QuoteWithRawRoute = Quote & { _rawRoute?: Route };
 
 export function useLiFiExecution() {
   const { address } = useAccount();
@@ -27,49 +29,20 @@ export function useLiFiExecution() {
         totalSteps: quote.steps.length,
       });
 
-      // Get the actual token address from LI.FI for the destination
-      let toTokenAddress = quote.toToken.address;
+      // Check if we have a raw route stored from the initial quote
+      const quoteWithRoute = quote as QuoteWithRawRoute;
       
-      // If destination is USDC, query LI.FI for the correct token address on Hyperliquid
-      if (quote.toToken.symbol === 'USDC') {
-        try {
-          const tokensResult = await getTokens({ chains: [HYPERLIQUID_CHAIN_ID] });
-          const hlTokens = tokensResult.tokens[HYPERLIQUID_CHAIN_ID] || [];
-          const lifiUsdc = hlTokens.find(t => t.symbol === 'USDC' || t.symbol === 'USDC.e');
-          if (lifiUsdc) {
-            console.log('[LI.FI] Using LI.FI USDC address for Hyperliquid:', lifiUsdc.address);
-            toTokenAddress = lifiUsdc.address;
-          }
-        } catch (e) {
-          console.warn('[LI.FI] Could not fetch Hyperliquid tokens, using quote token address');
-        }
+      if (!quoteWithRoute._rawRoute) {
+        throw new Error('No route data available. Please refresh the quote and try again.');
       }
       
-      console.log('[LI.FI] Fetching route for execution:', {
-        fromChain: quote.fromChain,
-        toChain: HYPERLIQUID_CHAIN_ID,
-        fromToken: quote.fromToken.address,
-        toToken: toTokenAddress,
-      });
-
-      // Fetch the actual route object from LI.FI
-      const routesResult = await getRoutes({
-        fromChainId: quote.fromChain,
-        toChainId: HYPERLIQUID_CHAIN_ID,
-        fromTokenAddress: quote.fromToken.address,
-        toTokenAddress: toTokenAddress,
-        fromAmount: quote.fromAmount,
-        fromAddress: address,
-      });
-
-      if (!routesResult.routes.length) {
-        throw new Error('No routes available');
-      }
-
-      const route = routesResult.routes[0];
-      console.log('[LI.FI] Route to execute:', { 
+      const route = quoteWithRoute._rawRoute;
+      
+      console.log('[LI.FI] Executing stored route:', { 
         id: route.id, 
-        toToken: route.toToken,
+        fromChain: route.fromChainId,
+        toChain: route.toChainId,
+        toToken: route.toToken?.symbol,
         steps: route.steps.length 
       });
 

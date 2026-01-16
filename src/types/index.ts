@@ -26,6 +26,8 @@ export interface Quote {
   gasCostUSD: string;
   steps: RouteStep[];
   slippage: number;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  _rawRoute?: any; // Raw LI.FI route for direct execution
 }
 
 export interface ExecutionStatus {
