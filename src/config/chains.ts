@@ -26,7 +26,7 @@ export const hyperliquid = defineChain({
   },
 });
 
-// Supported source chains for bridging
+// Supported source chains for bridging (external chains)
 export const sourceChains = [
   mainnet,
   arbitrum,
@@ -40,12 +40,13 @@ export const sourceChains = [
 // All supported chains including Hyperliquid
 export const allChains = [...sourceChains, hyperliquid] as const;
 
-// Chain metadata for UI
+// Chain metadata for UI - includes both mainnet chains and Hyperliquid options
 export const chainMetadata: Record<number, {
   name: string;
   shortName: string;
   logo: string;
   color: string;
+  isTestnet?: boolean;
 }> = {
   1: {
     name: 'Ethereum',
@@ -96,5 +97,29 @@ export const chainMetadata: Record<number, {
     color: '#4ADE80',
   },
 };
+
+// UI chain entries for the selector (includes testnet as separate entry)
+export interface ChainEntry {
+  id: number;
+  key: string; // Unique key for React
+  name: string;
+  shortName: string;
+  logo: string;
+  color: string;
+  isTestnet?: boolean;
+  rpcUrl?: string;
+}
+
+export const selectorChains: ChainEntry[] = [
+  { id: 1, key: 'eth', name: 'Ethereum', shortName: 'ETH', logo: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/info/logo.png', color: '#627EEA' },
+  { id: 42161, key: 'arb', name: 'Arbitrum', shortName: 'ARB', logo: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/arbitrum/info/logo.png', color: '#28A0F0' },
+  { id: 10, key: 'op', name: 'Optimism', shortName: 'OP', logo: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/optimism/info/logo.png', color: '#FF0420' },
+  { id: 137, key: 'matic', name: 'Polygon', shortName: 'MATIC', logo: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/polygon/info/logo.png', color: '#8247E5' },
+  { id: 8453, key: 'base', name: 'Base', shortName: 'BASE', logo: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/base/info/logo.png', color: '#0052FF' },
+  { id: 56, key: 'bnb', name: 'BNB Chain', shortName: 'BNB', logo: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/binance/info/logo.png', color: '#F3BA2F' },
+  { id: 43114, key: 'avax', name: 'Avalanche', shortName: 'AVAX', logo: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/avalanchec/info/logo.png', color: '#E84142' },
+  { id: 998, key: 'hyperliquid', name: 'Hyperliquid', shortName: 'HYPE', logo: '/assets/green.png', color: '#4ADE80' },
+  { id: 998, key: 'hyperliquid-testnet', name: 'Hyperliquid (Testnet)', shortName: 'HYPE-T', logo: '/assets/green.png', color: '#4ADE80', isTestnet: true, rpcUrl: 'https://rpc.hyperliquid-testnet.xyz/evm' },
+];
 
 export type SupportedChainId = (typeof allChains)[number]['id'];

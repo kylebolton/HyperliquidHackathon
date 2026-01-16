@@ -2,28 +2,31 @@ import { useState } from 'react';
 import { motion } from 'motion/react';
 import { ChevronDown, Search, Check } from 'lucide-react';
 import { cn } from '../../lib/utils';
-import { chainMetadata, sourceChains } from '../../config/chains';
+import { selectorChains } from '../../config/chains';
 import { getTokensForChain, type Token } from '../../config/tokens';
 import { Modal } from '../ui/Modal';
 
 interface ChainSelectorProps {
   selectedChainId: number | null;
-  onSelect: (chainId: number) => void;
+  selectedChainKey?: string | null;
+  onSelect: (chainId: number, chainKey?: string) => void;
   label?: string;
   disabled?: boolean;
 }
 
-export function ChainSelector({ selectedChainId, onSelect, label, disabled }: ChainSelectorProps) {
+export function ChainSelector({ selectedChainId, selectedChainKey, onSelect, label, disabled }: ChainSelectorProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
-  const selectedChain = selectedChainId ? chainMetadata[selectedChainId] : null;
+  // Find selected chain by key (for testnet distinction) or by id
+  const selectedChain = selectedChainKey 
+    ? selectorChains.find(c => c.key === selectedChainKey)
+    : selectorChains.find(c => c.id === selectedChainId && !c.isTestnet);
   
-  const filteredChains = sourceChains.filter((chain) => {
-    const metadata = chainMetadata[chain.id];
-    return metadata?.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-           metadata?.shortName.toLowerCase().includes(searchQuery.toLowerCase());
-  });
+  const filteredChains = selectorChains.filter((chain) => 
+    chain.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    chain.shortName.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   return (
     <>
@@ -86,15 +89,16 @@ export function ChainSelector({ selectedChainId, onSelect, label, disabled }: Ch
         {/* Chain List */}
         <div className="space-y-1">
           {filteredChains.map((chain) => {
-            const metadata = chainMetadata[chain.id];
-            const isSelected = chain.id === selectedChainId;
+            const isSelected = selectedChainKey 
+              ? chain.key === selectedChainKey 
+              : chain.id === selectedChainId && !chain.isTestnet;
             
             return (
               <motion.button
-                key={chain.id}
+                key={chain.key}
                 whileTap={{ scale: 0.98 }}
                 onClick={() => {
-                  onSelect(chain.id);
+                  onSelect(chain.id, chain.key);
                   setIsOpen(false);
                   setSearchQuery('');
                 }}
@@ -106,14 +110,21 @@ export function ChainSelector({ selectedChainId, onSelect, label, disabled }: Ch
                 )}
               >
                 <img
-                  src={metadata?.logo}
-                  alt={metadata?.name}
+                  src={chain.logo}
+                  alt={chain.name}
                   className="w-8 h-8 rounded-full"
                   onError={(e) => {
                     (e.target as HTMLImageElement).src = 'https://via.placeholder.com/32';
                   }}
                 />
-                <span className="flex-1 text-left font-medium text-white">{metadata?.name}</span>
+                <div className="flex-1 text-left">
+                  <span className="font-medium text-white">{chain.name}</span>
+                  {chain.isTestnet && (
+                    <span className="ml-2 text-xs px-1.5 py-0.5 bg-yellow-500/20 text-yellow-400 rounded">
+                      Testnet
+                    </span>
+                  )}
+                </div>
                 {isSelected && <Check className="w-5 h-5 text-accent" />}
               </motion.button>
             );

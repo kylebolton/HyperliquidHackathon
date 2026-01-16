@@ -12,7 +12,7 @@ import { Button } from '../ui/Button';
 import { useLiFiQuote } from '../../hooks/useLiFiQuote';
 import { useLiFiExecution } from '../../hooks/useLiFiExecution';
 import { hyperliquidTokens, type Token } from '../../config/tokens';
-import { HYPERLIQUID_CHAIN_ID } from '../../config/chains';
+import { HYPERLIQUID_CHAIN_ID, selectorChains } from '../../config/chains';
 
 type ButtonState = {
   text: string;
@@ -27,6 +27,7 @@ export function BridgeWidget() {
   
   // Bridge state
   const [fromChainId, setFromChainId] = useState<number | null>(null);
+  const [fromChainKey, setFromChainKey] = useState<string | null>(null);
   const [fromToken, setFromToken] = useState<Token | null>(null);
   const [toToken, setToToken] = useState<Token>(hyperliquidTokens[0]); // Default to USDC
   const [amount, setAmount] = useState('');
@@ -78,11 +79,16 @@ export function BridgeWidget() {
   // Check if on wrong network
   const isWrongNetwork = fromChainId && connectedChainId !== fromChainId;
 
+  // Get chain name for display
+  const fromChainName = fromChainKey 
+    ? selectorChains.find(c => c.key === fromChainKey)?.name 
+    : selectorChains.find(c => c.id === fromChainId)?.name;
+
   // Reset token when chain changes
   useEffect(() => {
     setFromToken(null);
     setAmount('');
-  }, [fromChainId]);
+  }, [fromChainId, fromChainKey]);
 
   // Determine button state with detailed feedback
   const buttonState: ButtonState = useMemo(() => {
@@ -105,7 +111,7 @@ export function BridgeWidget() {
       return { text: 'Insufficient Balance', disabled: true, variant: 'error' };
     }
     if (isWrongNetwork) {
-      return { text: `Switch to ${fromToken.chainId === 1 ? 'Ethereum' : 'Source Chain'}`, disabled: false, variant: 'warning' };
+      return { text: `Switch to ${fromChainName || 'Source Chain'}`, disabled: false, variant: 'warning' };
     }
     if (isLoadingQuote) {
       return { text: 'Finding Best Route...', disabled: true, variant: 'primary', showLoader: true };
@@ -215,7 +221,11 @@ export function BridgeWidget() {
             <div className="grid grid-cols-2 gap-3">
               <ChainSelector
                 selectedChainId={fromChainId}
-                onSelect={setFromChainId}
+                selectedChainKey={fromChainKey}
+                onSelect={(chainId, chainKey) => {
+                  setFromChainId(chainId);
+                  setFromChainKey(chainKey || null);
+                }}
               />
               <TokenSelector
                 chainId={fromChainId}

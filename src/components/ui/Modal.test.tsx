@@ -41,28 +41,28 @@ describe('Modal', () => {
     expect(screen.getByText('Modal content')).toBeInTheDocument();
   });
 
-  it('should have mobile-first bottom sheet styling', () => {
+  it('should be centered on screen', () => {
     render(
       <Modal isOpen={true} onClose={mockOnClose} title="Test Modal">
         <p>Modal content</p>
       </Modal>
     );
 
-    // Should have bottom-0 for mobile positioning
-    const modalContainer = screen.getByText('Test Modal').closest('[class*="bottom-0"]');
+    // Should have centering classes
+    const modalContainer = screen.getByText('Test Modal').closest('[class*="translate"]');
     expect(modalContainer).toBeInTheDocument();
   });
 
-  it('should have drag handle visible on mobile', () => {
+  it('should have proper width constraints', () => {
     render(
       <Modal isOpen={true} onClose={mockOnClose} title="Test Modal">
         <p>Modal content</p>
       </Modal>
     );
 
-    // Check for drag handle (hidden on sm+ screens)
-    const dragHandle = document.querySelector('[class*="sm:hidden"]');
-    expect(dragHandle).toBeInTheDocument();
+    // Should have max-w-md class for width constraint
+    const modalContainer = screen.getByText('Test Modal').closest('[class*="max-w-md"]');
+    expect(modalContainer).toBeInTheDocument();
   });
 
   it('should call onClose when close button is clicked', () => {
@@ -85,7 +85,7 @@ describe('Modal', () => {
       </Modal>
     );
 
-    // Should have max-h-[85vh] for mobile
+    // Should have max-h-[80vh]
     const modalContent = screen.getByText('Test Modal').closest('[class*="max-h-"]');
     expect(modalContent).toBeInTheDocument();
   });
