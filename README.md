@@ -62,7 +62,7 @@ import { DepositToHyperliquid } from './components/deposit/DepositToHyperliquid'
 | Avalanche | 43114 | AVAX |
 | **Sonic** | **146** | **S** |
 
-→ All bridging to **Hyperliquid** (Chain ID: 998)
+→ All bridging to **Hyperliquid** (Chain ID: 999)
 
 ## LI.FI Integration
 
