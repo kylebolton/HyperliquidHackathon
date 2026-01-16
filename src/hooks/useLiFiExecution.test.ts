@@ -1,35 +1,43 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useLiFiExecution } from './useLiFiExecution';
-import type { Quote } from '../types';
+import type { Quote, RouteStep } from '../types';
+
+const mockToken = {
+  address: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
+  symbol: 'USDC',
+  name: 'USD Coin',
+  decimals: 6,
+  logo: 'https://example.com/usdc.png',
+  chainId: 1,
+};
+
+const mockStep: RouteStep = {
+  type: 'bridge',
+  tool: 'across',
+  fromChain: 1,
+  toChain: 998,
+  fromToken: mockToken,
+  toToken: { ...mockToken, chainId: 998 },
+  fromAmount: '1000000000',
+  toAmount: '998000000',
+  estimatedTime: 300,
+};
 
 // Mock quote for testing
 const mockQuote: Quote = {
   id: 'test-quote-123',
   fromChain: 1,
   toChain: 998,
-  fromToken: {
-    address: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
-    symbol: 'USDC',
-    name: 'USD Coin',
-    decimals: 6,
-    logo: 'https://example.com/usdc.png',
-    chainId: 1,
-  },
-  toToken: {
-    address: '0x3c499c542cAb58579e359c57eBfE402d69d5c88d',
-    symbol: 'USDC',
-    name: 'USD Coin',
-    decimals: 6,
-    logo: 'https://example.com/usdc.png',
-    chainId: 998,
-  },
+  fromToken: mockToken,
+  toToken: { ...mockToken, chainId: 998 },
   fromAmount: '1000000000',
   toAmount: '998000000',
   estimatedTime: 300,
+  gasCost: '0.001',
   gasCostUSD: '2.50',
   slippage: 0.5,
-  steps: [{ type: 'bridge', fromChain: 1, toChain: 998, fromToken: {} as never, toToken: {} as never }],
+  steps: [mockStep],
 };
 
 // Mock wagmi
@@ -71,7 +79,7 @@ describe('useLiFiExecution', () => {
 
   it('should fail if no routes are available', async () => {
     const lifiSdk = await import('@lifi/sdk');
-    vi.mocked(lifiSdk.getRoutes).mockResolvedValue({ routes: [] });
+    vi.mocked(lifiSdk.getRoutes).mockResolvedValue({ routes: [], unavailableRoutes: { filteredOut: [], failed: [] } } as never);
 
     const { result } = renderHook(() => useLiFiExecution());
 
@@ -86,10 +94,15 @@ describe('useLiFiExecution', () => {
   });
 
   it('should execute route successfully', async () => {
-    const mockRoute = { steps: [{ id: 'step-1' }] };
+    const mockRoute = { 
+      id: 'route-1',
+      steps: [{ id: 'step-1' }],
+      fromChainId: 1,
+      toChainId: 998,
+    };
     const lifiSdk = await import('@lifi/sdk');
     
-    vi.mocked(lifiSdk.getRoutes).mockResolvedValue({ routes: [mockRoute] });
+    vi.mocked(lifiSdk.getRoutes).mockResolvedValue({ routes: [mockRoute], unavailableRoutes: { filteredOut: [], failed: [] } } as never);
     vi.mocked(lifiSdk.executeRoute).mockResolvedValue(mockRoute as never);
 
     const { result } = renderHook(() => useLiFiExecution());

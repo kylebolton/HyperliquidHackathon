@@ -29,6 +29,7 @@ const mockQuote: Quote = {
   fromAmount: '1000000000',
   toAmount: '998000000',
   estimatedTime: 300,
+  gasCost: '0.001',
   gasCostUSD: '2.50',
   slippage: 0.5,
   steps: [],

@@ -14,7 +14,6 @@ A minimal, mobile-first bridge dApp for swapping and bridging from any chain to 
 ## Quick Start
 
 ```bash
-cd liquyn-swap
 npm install
 cp .env.example .env
 # Add VITE_WALLETCONNECT_PROJECT_ID to .env

@@ -46,9 +46,9 @@ describe('useHyperliquidDeposit', () => {
     const hyperliquidService = await import('../services/hyperliquid');
     vi.mocked(hyperliquidService.depositToHyperliquid).mockImplementation(
       async (_walletClient, _publicClient, _amount, onStatusUpdate) => {
-        onStatusUpdate('checking', 'Checking balance...');
-        onStatusUpdate('approving', 'Approving USDC...');
-        onStatusUpdate('depositing', 'Depositing to Hyperliquid...');
+        onStatusUpdate?.('checking', 'Checking balance...');
+        onStatusUpdate?.('approving', 'Approving USDC...');
+        onStatusUpdate?.('depositing', 'Depositing to Hyperliquid...');
         return { success: true, txHash: '0xabc123' };
       }
     );
@@ -125,13 +125,10 @@ describe('useHyperliquidDeposit', () => {
     expect(result.current.error).toBeNull();
   });
 
-  it('should track isDepositing correctly during different statuses', () => {
-    const { result, rerender } = renderHook(() => useHyperliquidDeposit());
+  it('should track isDepositing correctly', () => {
+    const { result } = renderHook(() => useHyperliquidDeposit());
 
-    // Initial state
+    // Initial state - not depositing
     expect(result.current.isDepositing).toBe(false);
-
-    // The isDepositing should be true when status is 'checking', 'approving', or 'depositing'
-    // This is tested implicitly through the status transitions in the deposit function
   });
 });
