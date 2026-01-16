@@ -36,13 +36,13 @@ function App() {
 
                 <AnimatedContainer delay={0.1}>
                   <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-white mb-3">
-                    Bridge to <span className="text-accent">HyperEVM</span>
+                    Bridge to <span className="text-accent">Hyperliquid</span>
                   </h1>
                 </AnimatedContainer>
 
                 <AnimatedContainer delay={0.2}>
                   <p className="text-base sm:text-lg text-white/50 max-w-lg mx-auto">
-                    Swap and bridge from any chain to HyperEVM in one transaction.
+                    Swap and bridge from any chain to Hyperliquid in one transaction.
                   </p>
                 </AnimatedContainer>
               </div>

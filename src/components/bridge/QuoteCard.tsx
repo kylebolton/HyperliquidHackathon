@@ -79,7 +79,7 @@ export function QuoteCard({ quote, isLoading, error }: QuoteCardProps) {
             <div className="text-xl sm:text-2xl font-semibold text-white">
               {outputAmount} <span className="text-accent">{quote.toToken.symbol}</span>
             </div>
-            <div className="text-sm text-white/40">on HyperEVM</div>
+            <div className="text-sm text-white/40">on Hyperliquid</div>
           </div>
         </div>
       </div>

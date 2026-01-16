@@ -2,7 +2,7 @@ import { useState, useCallback } from 'react';
 import { useAccount, useWalletClient } from 'wagmi';
 import { executeRoute, getRoutes } from '@lifi/sdk';
 import type { ExecutionStatus, Quote } from '../types';
-import { HYPEREVM_CHAIN_ID } from '../services/lifi';
+import { HYPERLIQUID_CHAIN_ID } from '../config/chains';
 
 export function useLiFiExecution() {
   const { address } = useAccount();
@@ -30,7 +30,7 @@ export function useLiFiExecution() {
       // Fetch the actual route object from LI.FI
       const routesResult = await getRoutes({
         fromChainId: quote.fromChain,
-        toChainId: HYPEREVM_CHAIN_ID,
+        toChainId: HYPERLIQUID_CHAIN_ID,
         fromTokenAddress: quote.fromToken.address,
         toTokenAddress: quote.toToken.address,
         fromAmount: quote.fromAmount,

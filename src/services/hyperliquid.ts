@@ -1,12 +1,12 @@
 import { type WalletClient, type PublicClient, parseUnits } from 'viem';
-import { hyperEVM } from '../config/chains';
+import { hyperliquid } from '../config/chains';
 
-// Hyperliquid Bridge contract address on HyperEVM
+// Hyperliquid Bridge contract address
 // This is the bridge contract that allows depositing to L1 trading
 const HYPERLIQUID_BRIDGE_ADDRESS = '0x2Df1c51E09aECF9cacB7bc98cB1742757f163dF7' as const;
 
-// USDC address on HyperEVM
-const USDC_HYPEREVM_ADDRESS = '0xeb62eee3685fc4c43992febcd9e75443aef550ab' as const;
+// USDC address on Hyperliquid
+const USDC_HYPERLIQUID_ADDRESS = '0xeb62eee3685fc4c43992febcd9e75443aef550ab' as const;
 
 // ERC20 ABI for approval
 const ERC20_ABI = [
@@ -55,7 +55,7 @@ export interface DepositResult {
 }
 
 /**
- * Check USDC balance on HyperEVM
+ * Check USDC balance on Hyperliquid
  */
 export async function checkUSDCBalance(
   publicClient: PublicClient,
@@ -63,7 +63,7 @@ export async function checkUSDCBalance(
 ): Promise<bigint> {
   try {
     const balance = await publicClient.readContract({
-      address: USDC_HYPEREVM_ADDRESS,
+      address: USDC_HYPERLIQUID_ADDRESS,
       abi: ERC20_ABI,
       functionName: 'balanceOf',
       args: [userAddress],
@@ -85,7 +85,7 @@ export async function checkAllowance(
 ): Promise<boolean> {
   try {
     const allowance = await publicClient.readContract({
-      address: USDC_HYPEREVM_ADDRESS,
+      address: USDC_HYPERLIQUID_ADDRESS,
       abi: ERC20_ABI,
       functionName: 'allowance',
       args: [userAddress, HYPERLIQUID_BRIDGE_ADDRESS],
@@ -109,12 +109,12 @@ export async function approveUSDC(
     const [account] = await walletClient.getAddresses();
     
     const hash = await walletClient.writeContract({
-      address: USDC_HYPEREVM_ADDRESS,
+      address: USDC_HYPERLIQUID_ADDRESS,
       abi: ERC20_ABI,
       functionName: 'approve',
       args: [HYPERLIQUID_BRIDGE_ADDRESS, amount],
       account,
-      chain: hyperEVM,
+      chain: hyperliquid,
     });
 
     // Wait for transaction confirmation
@@ -130,7 +130,7 @@ export async function approveUSDC(
 
 /**
  * Deposit USDC to Hyperliquid L1 trading account
- * This bridges USDC from HyperEVM to the Hyperliquid L1 for trading
+ * This bridges USDC from the EVM chain to the Hyperliquid L1 for trading
  */
 export async function depositToHyperliquid(
   walletClient: WalletClient,
@@ -175,7 +175,7 @@ export async function depositToHyperliquid(
       functionName: 'depositUsdc',
       args: [amount],
       account,
-      chain: hyperEVM,
+      chain: hyperliquid,
     });
 
     // Wait for confirmation

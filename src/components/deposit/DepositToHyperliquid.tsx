@@ -1,7 +1,7 @@
 /**
  * DepositToHyperliquid Component
  * 
- * A reusable component for depositing USDC from HyperEVM to Hyperliquid L1 trading account.
+ * A reusable component for depositing USDC from Hyperliquid EVM to Hyperliquid L1 trading account.
  * 
  * @example
  * ```tsx
@@ -151,7 +151,7 @@ export function DepositToHyperliquid({
           <div className="w-7 h-7 rounded-lg bg-accent/10 flex items-center justify-center">
             <span className="text-[10px] font-bold text-accent">EVM</span>
           </div>
-          <span className="text-sm text-white/70">HyperEVM</span>
+          <span className="text-sm text-white/70">Hyperliquid</span>
         </div>
 
         <ArrowRight className={cn('w-4 h-4', status === 'depositing' ? 'text-accent animate-pulse' : 'text-white/20')} />

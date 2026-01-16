@@ -47,7 +47,6 @@ vi.mock('wagmi', () => ({
 vi.mock('../services/lifi', () => ({
   fetchQuote: vi.fn(),
   fetchRoutes: vi.fn(),
-  HYPEREVM_CHAIN_ID: 998,
 }));
 
 describe('useLiFiQuote', () => {

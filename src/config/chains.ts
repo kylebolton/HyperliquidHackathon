@@ -1,10 +1,13 @@
 import { defineChain } from 'viem';
 import { mainnet, arbitrum, optimism, polygon, base, bsc, avalanche } from 'wagmi/chains';
 
-// HyperEVM Chain Definition
-export const hyperEVM = defineChain({
-  id: 998,
-  name: 'HyperEVM',
+// Hyperliquid Chain ID (Mainnet)
+export const HYPERLIQUID_CHAIN_ID = 998;
+
+// Hyperliquid Chain Definition (Mainnet)
+export const hyperliquid = defineChain({
+  id: HYPERLIQUID_CHAIN_ID,
+  name: 'Hyperliquid',
   nativeCurrency: {
     name: 'HYPE',
     symbol: 'HYPE',
@@ -17,7 +20,7 @@ export const hyperEVM = defineChain({
   },
   blockExplorers: {
     default: {
-      name: 'HyperScan',
+      name: 'Hyperliquid Explorer',
       url: 'https://explorer.hyperliquid.xyz',
     },
   },
@@ -34,8 +37,8 @@ export const sourceChains = [
   avalanche,
 ] as const;
 
-// All supported chains including HyperEVM
-export const allChains = [...sourceChains, hyperEVM] as const;
+// All supported chains including Hyperliquid
+export const allChains = [...sourceChains, hyperliquid] as const;
 
 // Chain metadata for UI
 export const chainMetadata: Record<number, {
@@ -86,11 +89,11 @@ export const chainMetadata: Record<number, {
     logo: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/avalanchec/info/logo.png',
     color: '#E84142',
   },
-  998: {
-    name: 'HyperEVM',
+  [HYPERLIQUID_CHAIN_ID]: {
+    name: 'Hyperliquid',
     shortName: 'HYPE',
-    logo: '/hyperliquid-logo.svg',
-    color: '#00d4ff',
+    logo: '/assets/green.png',
+    color: '#4ADE80',
   },
 };
 

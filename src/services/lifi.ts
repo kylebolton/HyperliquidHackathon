@@ -1,5 +1,6 @@
 import { createConfig, getQuote, getRoutes, executeRoute, type Route, type RoutesRequest, type QuoteRequest } from '@lifi/sdk';
 import type { Quote, RouteStep } from '../types';
+import { HYPERLIQUID_CHAIN_ID } from '../config/chains';
 
 // Initialize LI.FI SDK
 const lifiConfig = createConfig({
@@ -8,9 +9,6 @@ const lifiConfig = createConfig({
 });
 
 export { lifiConfig };
-
-// HyperEVM chain ID
-export const HYPEREVM_CHAIN_ID = 998;
 
 // Convert LI.FI route to our Quote format
 function convertToQuote(route: Route): Quote {
@@ -71,7 +69,7 @@ function convertToQuote(route: Route): Quote {
   };
 }
 
-// Fetch quote for bridging to HyperEVM
+// Fetch quote for bridging to Hyperliquid
 export async function fetchQuote(
   fromChainId: number,
   fromTokenAddress: string,
@@ -83,7 +81,7 @@ export async function fetchQuote(
   try {
     const quoteRequest: QuoteRequest = {
       fromChain: fromChainId,
-      toChain: HYPEREVM_CHAIN_ID,
+      toChain: HYPERLIQUID_CHAIN_ID,
       fromToken: fromTokenAddress,
       toToken: toTokenAddress,
       fromAmount: fromAmount,
@@ -187,7 +185,7 @@ export async function fetchRoutes(
   try {
     const routesRequest: RoutesRequest = {
       fromChainId,
-      toChainId: HYPEREVM_CHAIN_ID,
+      toChainId: HYPERLIQUID_CHAIN_ID,
       fromTokenAddress,
       toTokenAddress,
       fromAmount,
@@ -246,11 +244,11 @@ export async function executeBridgeRoute(
 // Get supported chains from LI.FI
 export async function getSupportedChains(): Promise<number[]> {
   // LI.FI supports most major EVM chains
-  // For now, return our predefined list that includes HyperEVM
-  return [1, 10, 42161, 137, 8453, 56, 43114, 998];
+  // For now, return our predefined list that includes Hyperliquid
+  return [1, 10, 42161, 137, 8453, 56, 43114, HYPERLIQUID_CHAIN_ID];
 }
 
-// Check if a route to HyperEVM is possible
+// Check if a route to Hyperliquid is possible
 export async function checkRouteAvailable(
   fromChainId: number,
   fromTokenAddress: string,

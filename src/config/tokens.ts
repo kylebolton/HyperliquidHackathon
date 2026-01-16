@@ -1,3 +1,5 @@
+import { HYPERLIQUID_CHAIN_ID } from './chains';
+
 // Token definitions for bridging
 export interface Token {
   symbol: string;
@@ -172,14 +174,14 @@ export const popularTokens: Record<number, Token[]> = {
   ],
 };
 
-// HyperEVM destination tokens
-export const hyperEVMTokens: Token[] = [
+// Hyperliquid destination tokens
+export const hyperliquidTokens: Token[] = [
   {
     symbol: 'USDC',
     name: 'USD Coin',
     decimals: 6,
-    address: '0xeb62eee3685fc4c43992febcd9e75443aef550ab', // USDC on HyperEVM
-    chainId: 998,
+    address: '0xeb62eee3685fc4c43992febcd9e75443aef550ab', // USDC on Hyperliquid
+    chainId: HYPERLIQUID_CHAIN_ID,
     logo: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48/logo.png',
   },
   {
@@ -187,8 +189,8 @@ export const hyperEVMTokens: Token[] = [
     name: 'Hyperliquid',
     decimals: 18,
     address: NATIVE_TOKEN_ADDRESS,
-    chainId: 998,
-    logo: '/hyperliquid-logo.svg',
+    chainId: HYPERLIQUID_CHAIN_ID,
+    logo: '/assets/green.png',
   },
 ];
 

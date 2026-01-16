@@ -11,7 +11,8 @@ import { DepositToHyperliquid } from '../deposit/DepositToHyperliquid';
 import { Button } from '../ui/Button';
 import { useLiFiQuote } from '../../hooks/useLiFiQuote';
 import { useLiFiExecution } from '../../hooks/useLiFiExecution';
-import { hyperEVMTokens, type Token } from '../../config/tokens';
+import { hyperliquidTokens, type Token } from '../../config/tokens';
+import { HYPERLIQUID_CHAIN_ID } from '../../config/chains';
 
 export function BridgeWidget() {
   const { address, isConnected } = useAccount();
@@ -19,7 +20,7 @@ export function BridgeWidget() {
   // Bridge state
   const [fromChainId, setFromChainId] = useState<number | null>(null);
   const [fromToken, setFromToken] = useState<Token | null>(null);
-  const [toToken, setToToken] = useState<Token>(hyperEVMTokens[0]); // Default to USDC
+  const [toToken, setToToken] = useState<Token>(hyperliquidTokens[0]); // Default to USDC
   const [amount, setAmount] = useState('');
   const [autoDeposit, setAutoDeposit] = useState(false);
   const [showDepositModal, setShowDepositModal] = useState(false);
@@ -159,11 +160,11 @@ export function BridgeWidget() {
 
           {/* To Section */}
           <div className="space-y-3">
-            <span className="text-sm font-medium text-white/50">To (HyperEVM)</span>
+            <span className="text-sm font-medium text-white/50">To (Hyperliquid)</span>
             
             {/* Destination Token Selector */}
             <div className="flex gap-2">
-              {hyperEVMTokens.map((token) => (
+              {hyperliquidTokens.map((token) => (
                 <button
                   key={token.symbol}
                   onClick={() => setToToken(token)}
@@ -193,16 +194,16 @@ export function BridgeWidget() {
               ))}
             </div>
 
-            {/* HyperEVM Badge */}
+            {/* Hyperliquid Badge */}
             <div className="flex items-center gap-2.5 p-3 bg-dark-700/50 rounded-xl border border-dark-400/20">
               <img 
                 src="/assets/green.png" 
-                alt="Liquyn" 
+                alt="Hyperliquid" 
                 className="h-7 w-auto"
               />
               <div>
-                <div className="text-sm font-medium text-white">HyperEVM</div>
-                <div className="text-xs text-white/40">Chain ID: 998</div>
+                <div className="text-sm font-medium text-white">Hyperliquid</div>
+                <div className="text-xs text-white/40">Chain ID: {HYPERLIQUID_CHAIN_ID}</div>
               </div>
             </div>
           </div>
@@ -249,7 +250,7 @@ export function BridgeWidget() {
               ? 'Finding Route...'
               : isExecuting
               ? 'Bridging...'
-              : 'Bridge to HyperEVM'}
+              : 'Bridge to Hyperliquid'}
           </Button>
         </div>
       </motion.div>

@@ -86,8 +86,8 @@ export function useHyperliquidDeposit(): UseHyperliquidDepositResult {
   };
 }
 
-// Hook to check USDC balance on HyperEVM
-export function useHyperEVMBalance() {
+// Hook to check USDC balance on Hyperliquid
+export function useHyperliquidBalance() {
   const { address } = useAccount();
   const publicClient = usePublicClient();
   const [balance, setBalance] = useState<string>('0');
