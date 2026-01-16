@@ -12,7 +12,7 @@ import {
   type RailgunChainId,
   type PrivacyOperationState,
 } from '../services/railgun';
-import type { Quote, PrivacyRouteQuote, StandardRouteQuote, PrivacyStep, PrivacyExecutionState, PrivacyStepId } from '../types';
+import type { Quote, PrivacyRouteQuote, StandardRouteQuote, PrivacyStep, PrivacyExecutionState } from '../types';
 
 interface UsePrivacyRouteParams {
   fromChainId: number | null;
