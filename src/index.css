@@ -114,3 +114,35 @@
     @apply bg-gradient-to-r from-accent-400 to-accent-300 bg-clip-text text-transparent;
   }
 }
+
+/* RainbowKit Modal Centering Overrides */
+[data-rk] [role="dialog"] {
+  position: fixed !important;
+  left: 50% !important;
+  top: 50% !important;
+  transform: translate(-50%, -50%) !important;
+  max-width: calc(100vw - 32px) !important;
+  max-height: 80vh !important;
+}
+
+/* RainbowKit modal container fix */
+[data-rk] > div[style*="position: fixed"] {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+/* RainbowKit chain modal specific fix */
+[data-rk] [aria-label="Chain options"],
+[data-rk] [aria-label="Network selector"] {
+  position: fixed !important;
+  left: 50% !important;
+  top: 50% !important;
+  transform: translate(-50%, -50%) !important;
+}
+
+/* Ensure RainbowKit modals don't go off screen */
+[data-rk] div[role="dialog"] > div {
+  max-height: 80vh !important;
+  overflow-y: auto !important;
+}
