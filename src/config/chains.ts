@@ -193,7 +193,7 @@ export const selectorChains: ChainEntry[] = [
   { id: 8453, key: 'base', name: 'Base', shortName: 'BASE', logo: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/base/info/logo.png', color: '#0052FF' },
   { id: 56, key: 'bnb', name: 'BNB Chain', shortName: 'BNB', logo: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/binance/info/logo.png', color: '#F3BA2F' },
   { id: 43114, key: 'avax', name: 'Avalanche', shortName: 'AVAX', logo: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/avalanchec/info/logo.png', color: '#E84142' },
-  { id: SONIC_CHAIN_ID, key: 'sonic', name: 'Sonic', shortName: 'S', logo: 'https://raw.githubusercontent.com/Fantom-foundation/brand-assets/main/sonic/S-logo.png', color: '#1DB4F4' },
+  { id: SONIC_CHAIN_ID, key: 'sonic', name: 'Sonic', shortName: 'S', logo: 'https://s2.coinmarketcap.com/static/img/coins/64x64/32684.png', color: '#1DB4F4' },
   { id: HYPERLIQUID_CHAIN_ID, key: 'hyperliquid', name: 'Hyperliquid', shortName: 'HYPE', logo: '/assets/green.png', color: '#4ADE80' },
   { id: HYPERLIQUID_TESTNET_CHAIN_ID, key: 'hyperliquid-testnet', name: 'Hyperliquid (Testnet)', shortName: 'HYPE-T', logo: '/assets/green.png', color: '#4ADE80', isTestnet: true, rpcUrl: 'https://rpc.hyperliquid-testnet.xyz/evm' },
 ];
@@ -204,3 +204,91 @@ export const sourceSelectorChains = selectorChains.filter(
 );
 
 export type SupportedChainId = (typeof allChains)[number]['id'];
+
+// Railgun-supported chains for privacy routing
+export const RAILGUN_SUPPORTED_CHAIN_IDS = [1, 137, 42161, 56] as const;
+
+export const railgunChainMetadata: Record<number, {
+  name: string;
+  shortName: string;
+  logo: string;
+  color: string;
+  gasCostLevel: 'low' | 'medium' | 'high';
+  recommendedForPrivacy: boolean;
+}> = {
+  1: {
+    name: 'Ethereum',
+    shortName: 'ETH',
+    logo: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/info/logo.png',
+    color: '#627EEA',
+    gasCostLevel: 'high',
+    recommendedForPrivacy: false, // High gas costs
+  },
+  137: {
+    name: 'Polygon',
+    shortName: 'MATIC',
+    logo: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/polygon/info/logo.png',
+    color: '#8247E5',
+    gasCostLevel: 'low',
+    recommendedForPrivacy: true,
+  },
+  42161: {
+    name: 'Arbitrum',
+    shortName: 'ARB',
+    logo: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/arbitrum/info/logo.png',
+    color: '#28A0F0',
+    gasCostLevel: 'low',
+    recommendedForPrivacy: true,
+  },
+  56: {
+    name: 'BNB Chain',
+    shortName: 'BNB',
+    logo: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/binance/info/logo.png',
+    color: '#F3BA2F',
+    gasCostLevel: 'low',
+    recommendedForPrivacy: true,
+  },
+};
+
+/**
+ * Check if a chain supports Railgun privacy
+ */
+export function isRailgunSupportedChain(chainId: number): boolean {
+  return RAILGUN_SUPPORTED_CHAIN_IDS.includes(chainId as typeof RAILGUN_SUPPORTED_CHAIN_IDS[number]);
+}
+
+/**
+ * Get recommended Railgun chain based on user's source chain
+ * Prefers the source chain if it supports Railgun, otherwise defaults to Arbitrum
+ */
+export function getRecommendedRailgunChain(sourceChainId: number): number {
+  if (isRailgunSupportedChain(sourceChainId)) {
+    return sourceChainId;
+  }
+  // Default to Arbitrum for best balance of cost and speed
+  return 42161;
+}
+
+/**
+ * Get all chains that support Railgun for UI selection
+ */
+export function getRailgunChainOptions(): Array<{
+  id: number;
+  name: string;
+  shortName: string;
+  logo: string;
+  color: string;
+  recommended: boolean;
+}> {
+  return RAILGUN_SUPPORTED_CHAIN_IDS.map(id => {
+    const meta = railgunChainMetadata[id];
+    return {
+      id,
+      name: meta.name,
+      shortName: meta.shortName,
+      logo: meta.logo,
+      color: meta.color,
+      recommended: meta.recommendedForPrivacy,
+    };
+  });
+}

@@ -1,8 +1,9 @@
 import { motion } from 'motion/react';
-import { Clock, Fuel, TrendingDown, AlertCircle, Loader2 } from 'lucide-react';
+import { Clock, Fuel, TrendingDown, AlertCircle, Loader2, Shield, Timer } from 'lucide-react';
 import { formatAmount, formatDuration, formatUSD } from '../../lib/utils';
-import type { Quote } from '../../types';
+import type { Quote, PrivacyRouteQuote } from '../../types';
 import { RouteSteps } from './RouteSteps';
+import { isPrivacyRoute } from '../../hooks/usePrivacyRoute';
 
 interface QuoteCardProps {
   quote: Quote | null;
@@ -50,12 +51,28 @@ export function QuoteCard({ quote, isLoading, error }: QuoteCardProps) {
     4
   );
 
+  const isPrivate = isPrivacyRoute(quote);
+  const privacyQuote = isPrivate ? (quote as PrivacyRouteQuote) : null;
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      className="bg-dark-800/50 border border-dark-400/30 rounded-2xl overflow-hidden"
+      className={`bg-dark-800/50 border rounded-2xl overflow-hidden ${
+        isPrivate ? 'border-purple-500/30' : 'border-dark-400/30'
+      }`}
     >
+      {/* Privacy Badge */}
+      {isPrivate && (
+        <div className="px-5 py-2.5 bg-purple-500/10 border-b border-purple-500/20 flex items-center gap-2">
+          <Shield className="w-4 h-4 text-purple-400" />
+          <span className="text-sm font-medium text-purple-400">Privacy Route via Railgun</span>
+          <span className="text-xs text-purple-400/60 ml-auto">
+            {privacyQuote?.privacyChainName}
+          </span>
+        </div>
+      )}
+
       {/* Header */}
       <div className="p-5 border-b border-dark-400/20">
         <div className="flex items-center justify-between mb-3">
@@ -107,6 +124,29 @@ export function QuoteCard({ quote, isLoading, error }: QuoteCardProps) {
           </div>
           <span className="text-white">{quote.slippage}%</span>
         </div>
+
+        {/* Privacy-specific details */}
+        {isPrivate && privacyQuote && (
+          <>
+            <div className="my-3 border-t border-purple-500/20" />
+            
+            <div className="flex items-center justify-between text-sm">
+              <div className="flex items-center gap-2 text-purple-400/70">
+                <Shield className="w-4 h-4" />
+                <span>Privacy Fees</span>
+              </div>
+              <span className="text-purple-400">{formatUSD(parseFloat(privacyQuote.privacyFeeUSD))}</span>
+            </div>
+            
+            <div className="flex items-center justify-between text-sm">
+              <div className="flex items-center gap-2 text-purple-400/70">
+                <Timer className="w-4 h-4" />
+                <span>Anonymity Wait</span>
+              </div>
+              <span className="text-purple-400">{formatDuration(privacyQuote.recommendedWaitTime)}</span>
+            </div>
+          </>
+        )}
       </div>
     </motion.div>
   );

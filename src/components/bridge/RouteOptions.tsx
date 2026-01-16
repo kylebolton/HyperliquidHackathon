@@ -1,7 +1,8 @@
 import { motion } from 'motion/react';
-import { Clock, Fuel, Zap, Trophy, ArrowRight, Check, Loader2 } from 'lucide-react';
+import { Clock, Fuel, Zap, Trophy, ArrowRight, Check, Loader2, Shield } from 'lucide-react';
 import { cn, formatAmount, formatDuration } from '../../lib/utils';
-import type { Quote } from '../../types';
+import type { Quote, PrivacyRouteQuote } from '../../types';
+import { isPrivacyRoute } from '../../hooks/usePrivacyRoute';
 
 interface RouteOptionsProps {
   routes: Quote[];
@@ -31,11 +32,12 @@ function categorizeRoutes(routes: Quote[]): {
   return { recommended, fastest, cheapest };
 }
 
-function RouteTag({ type }: { type: 'recommended' | 'fastest' | 'cheapest' }) {
+function RouteTag({ type }: { type: 'recommended' | 'fastest' | 'cheapest' | 'private' }) {
   const config = {
     recommended: { icon: Trophy, label: 'Best', color: 'text-accent bg-accent/10' },
     fastest: { icon: Zap, label: 'Fastest', color: 'text-yellow-400 bg-yellow-400/10' },
     cheapest: { icon: Fuel, label: 'Cheapest', color: 'text-blue-400 bg-blue-400/10' },
+    private: { icon: Shield, label: 'Private', color: 'text-purple-400 bg-purple-400/10' },
   };
 
   const { icon: Icon, label, color } = config[type];
@@ -57,8 +59,10 @@ function RouteCard({
   route: Quote;
   isSelected: boolean;
   onSelect: () => void;
-  tags: ('recommended' | 'fastest' | 'cheapest')[];
+  tags: ('recommended' | 'fastest' | 'cheapest' | 'private')[];
 }) {
+  const isPrivate = isPrivacyRoute(route);
+  const privacyQuote = isPrivate ? (route as PrivacyRouteQuote) : null;
   // Get bridge/DEX tools being used
   const tools = route.steps.map(step => ({
     name: step.tool,
@@ -77,8 +81,12 @@ function RouteCard({
       className={cn(
         'w-full p-4 rounded-xl border transition-all duration-200 text-left',
         isSelected
-          ? 'bg-accent/10 border-accent/40 shadow-lg shadow-accent/5'
-          : 'bg-dark-700/50 border-dark-400/30 hover:border-dark-300/50'
+          ? isPrivate
+            ? 'bg-purple-500/10 border-purple-500/40 shadow-lg shadow-purple-500/5'
+            : 'bg-accent/10 border-accent/40 shadow-lg shadow-accent/5'
+          : isPrivate
+            ? 'bg-dark-700/50 border-purple-500/20 hover:border-purple-500/40'
+            : 'bg-dark-700/50 border-dark-400/30 hover:border-dark-300/50'
       )}
     >
       {/* Tags Row */}
@@ -130,6 +138,12 @@ function RouteCard({
           <Fuel className="w-3.5 h-3.5" />
           <span>${formatAmount(parseFloat(route.gasCostUSD || '0'), 2)} gas</span>
         </div>
+        {isPrivate && privacyQuote && (
+          <div className="flex items-center gap-1.5 text-purple-400/70">
+            <Shield className="w-3.5 h-3.5" />
+            <span>via {privacyQuote.privacyChainName}</span>
+          </div>
+        )}
       </div>
 
       {/* Tools/Protocols Used */}
@@ -188,8 +202,9 @@ export function RouteOptions({ routes, selectedRoute, onSelectRoute, isLoading }
   const { recommended, fastest, cheapest } = categorizeRoutes(routes);
 
   // Build tag mapping
-  const getRouteTags = (route: Quote): ('recommended' | 'fastest' | 'cheapest')[] => {
-    const tags: ('recommended' | 'fastest' | 'cheapest')[] = [];
+  const getRouteTags = (route: Quote): ('recommended' | 'fastest' | 'cheapest' | 'private')[] => {
+    const tags: ('recommended' | 'fastest' | 'cheapest' | 'private')[] = [];
+    if (isPrivacyRoute(route)) tags.push('private');
     if (route.id === recommended?.id) tags.push('recommended');
     if (route.id === fastest?.id && fastest?.id !== recommended?.id) tags.push('fastest');
     if (route.id === cheapest?.id && cheapest?.id !== recommended?.id && cheapest?.id !== fastest?.id) tags.push('cheapest');

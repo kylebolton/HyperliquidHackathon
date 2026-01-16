@@ -2,21 +2,24 @@ import { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAccount, useBalance, useSwitchChain } from 'wagmi';
 import { parseUnits } from 'viem';
-import { ArrowDown, AlertCircle, Loader2, Info, RefreshCw } from 'lucide-react';
+import { ArrowDown, AlertCircle, Loader2, Info, RefreshCw, Shield } from 'lucide-react';
 import { cn, formatAmount } from '../../lib/utils';
 import { ChainSelector, TokenSelector } from './ChainTokenSelector';
 import { QuoteCard } from './QuoteCard';
 import { ExecutionProgress } from './ExecutionProgress';
 import { RouteOptions } from './RouteOptions';
 import { SlippageSettings } from './SlippageSettings';
+import { PrivacyToggle } from './PrivacyToggle';
+import { PrivacyProgress } from './PrivacyProgress';
 import { DepositToHyperliquid } from '../deposit/DepositToHyperliquid';
 import { Button } from '../ui/Button';
 import { useLiFiRoutes } from '../../hooks/useLiFiQuote';
 import { useRetryExecution } from '../../hooks/useRetryExecution';
+import { usePrivacyRoutes, usePrivacyExecution, isPrivacyRoute } from '../../hooks/usePrivacyRoute';
 import { useTransactionStatus, getStatusMessage } from '../../hooks/useTransactionStatus';
 import { hyperliquidTokens, type Token } from '../../config/tokens';
 import { HYPERLIQUID_CHAIN_ID, sourceSelectorChains } from '../../config/chains';
-import type { Quote } from '../../types';
+import type { Quote, PrivacyRouteQuote } from '../../types';
 
 type ButtonState = {
   text: string;
@@ -47,6 +50,7 @@ export function BridgeWidget() {
   const [autoDeposit, setAutoDeposit] = useState(false);
   const [showDepositModal, setShowDepositModal] = useState(false);
   const [selectedRoute, setSelectedRoute] = useState<Quote | null>(null);
+  const [privacyEnabled, setPrivacyEnabled] = useState(false);
 
   // Get balance for selected token
   const { data: balance, isLoading: isBalanceLoading } = useBalance({
@@ -73,21 +77,59 @@ export function BridgeWidget() {
     return parseFloat(balance.formatted) >= parseFloat(amount);
   }, [balance, amount]);
 
-  // Get multiple routes for comparison
+  // Get standard routes
   const { 
-    data: routes, 
-    isLoading: isLoadingRoutes, 
-    error: routeError,
-    isFetched: isRoutesFetched,
-    refetch: refetchRoutes,
+    data: standardRoutes, 
+    isLoading: isLoadingStandardRoutes, 
+    error: standardRouteError,
+    isFetched: isStandardRoutesFetched,
+    refetch: refetchStandardRoutes,
   } = useLiFiRoutes({
     fromChainId,
     fromTokenAddress: fromToken?.address || null,
     toTokenAddress: toToken.address,
     amount: amountInUnits,
     slippage,
-    enabled: !!fromChainId && !!fromToken && !!amount && parseFloat(amount) > 0 && hasSufficientBalance,
+    enabled: !!fromChainId && !!fromToken && !!amount && parseFloat(amount) > 0 && hasSufficientBalance && !privacyEnabled,
   });
+
+  // Get privacy-enhanced routes when privacy is enabled
+  const {
+    standardRoutes: privacyStandardRoutes,
+    privacyRoutes,
+    isLoading: isLoadingPrivacyRoutes,
+    error: privacyRouteError,
+    refetch: refetchPrivacyRoutes,
+  } = usePrivacyRoutes({
+    fromChainId,
+    fromTokenAddress: fromToken?.address || null,
+    toTokenAddress: toToken.address,
+    amount: amountInUnits,
+    slippage,
+    privacyEnabled,
+    enabled: !!fromChainId && !!fromToken && !!amount && parseFloat(amount) > 0 && hasSufficientBalance && privacyEnabled,
+  });
+
+  // Combine routes based on privacy mode
+  const routes = useMemo(() => {
+    if (privacyEnabled) {
+      // Show privacy routes first, then standard routes from privacy hook
+      return [...privacyRoutes, ...privacyStandardRoutes];
+    }
+    return standardRoutes || [];
+  }, [privacyEnabled, privacyRoutes, privacyStandardRoutes, standardRoutes]);
+
+  const isLoadingRoutes = privacyEnabled ? isLoadingPrivacyRoutes : isLoadingStandardRoutes;
+  const routeError = privacyEnabled ? privacyRouteError : standardRouteError;
+  const isRoutesFetched = privacyEnabled ? (privacyRoutes.length > 0 || privacyStandardRoutes.length > 0) : isStandardRoutesFetched;
+  
+  const refetchRoutes = () => {
+    if (privacyEnabled) {
+      refetchPrivacyRoutes();
+    } else {
+      refetchStandardRoutes();
+    }
+  };
 
   // Auto-select best route when routes change
   useEffect(() => {
@@ -98,19 +140,29 @@ export function BridgeWidget() {
     }
   }, [routes]);
 
-  // Execution with retry support
+  // Execution with retry support (standard routes)
   const { 
     status: executionStatus, 
     stepExecutions,
     execute, 
     retry,
     reset: resetExecution, 
-    isExecuting,
+    isExecuting: isStandardExecuting,
     lastError,
     canRetry,
     retryCount,
     maxRetries,
   } = useRetryExecution();
+
+  // Privacy execution
+  const {
+    executionState: privacyExecutionState,
+    executePrivacyRoute,
+    reset: resetPrivacyExecution,
+    isExecuting: isPrivacyExecuting,
+  } = usePrivacyExecution();
+
+  const isExecuting = isStandardExecuting || isPrivacyExecuting;
 
   // Transaction status polling for cross-chain tracking
   const { status: txStatus, isPolling } = useTransactionStatus({
@@ -173,16 +225,20 @@ export function BridgeWidget() {
       return { text: 'No Route Found', disabled: true, variant: 'error' };
     }
     if (isExecuting) {
-      return { text: 'Bridging...', disabled: true, variant: 'primary', showLoader: true };
+      const text = privacyEnabled && isPrivacyExecuting ? 'Privacy Bridging...' : 'Bridging...';
+      return { text, disabled: true, variant: 'primary', showLoader: true };
     }
     if (selectedRoute) {
-      return { text: 'Bridge to Hyperliquid', disabled: false, variant: 'primary' };
+      const isPrivate = isPrivacyRoute(selectedRoute);
+      const text = isPrivate ? 'Private Bridge to Hyperliquid' : 'Bridge to Hyperliquid';
+      return { text, disabled: false, variant: 'primary' };
     }
     return { text: 'Select a Route', disabled: true, variant: 'primary' };
   }, [
     isConnected, fromChainId, fromToken, amount, isBalanceLoading, 
     hasSufficientBalance, isWrongNetwork, isLoadingRoutes, routeError,
-    isRoutesFetched, routes, isExecuting, selectedRoute, fromChainName
+    isRoutesFetched, routes, isExecuting, selectedRoute, fromChainName,
+    privacyEnabled, isPrivacyExecuting
   ]);
 
   // Handle bridge execution or network switch
@@ -193,7 +249,14 @@ export function BridgeWidget() {
     }
     if (!selectedRoute) return;
     
-    const success = await execute(selectedRoute);
+    let success = false;
+    
+    // Check if this is a privacy route
+    if (isPrivacyRoute(selectedRoute)) {
+      success = await executePrivacyRoute(selectedRoute as PrivacyRouteQuote);
+    } else {
+      success = await execute(selectedRoute);
+    }
     
     if (success && autoDeposit && toToken.symbol === 'USDC') {
       setShowDepositModal(true);
@@ -276,9 +339,17 @@ export function BridgeWidget() {
         className="bg-dark-800/80 border border-dark-400/30 rounded-2xl p-5 sm:p-6"
       >
         <div className="space-y-5">
-          {/* Header with Slippage Settings */}
+          {/* Header with Privacy Toggle and Slippage Settings */}
           <div className="flex items-center justify-between">
-            <span className="text-sm font-medium text-white/50">From</span>
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium text-white/50">From</span>
+              {privacyEnabled && (
+                <span className="flex items-center gap-1 px-2 py-0.5 bg-purple-500/20 border border-purple-500/30 rounded-full">
+                  <Shield className="w-3 h-3 text-purple-400" />
+                  <span className="text-xs font-medium text-purple-400">Private</span>
+                </span>
+              )}
+            </div>
             <div className="flex items-center gap-2">
               {balance && fromToken && (
                 <span className={cn(
@@ -290,6 +361,11 @@ export function BridgeWidget() {
                   Balance: {formatAmount(balance.formatted)} {fromToken.symbol}
                 </span>
               )}
+              <PrivacyToggle
+                enabled={privacyEnabled}
+                onToggle={setPrivacyEnabled}
+                disabled={isExecuting}
+              />
               <SlippageSettings slippage={slippage} onSlippageChange={setSlippage} />
             </div>
           </div>
@@ -517,21 +593,43 @@ export function BridgeWidget() {
         />
       )}
 
-      {/* Execution Progress */}
-      <ExecutionProgress
-        status={executionStatus}
-        steps={selectedRoute?.steps}
-        stepStatuses={stepExecutions}
-        onClose={() => {
-          resetExecution();
-          if (executionStatus.status === 'completed') {
-            setAmount('');
-            setSelectedRoute(null);
-            refetchRoutes();
-          }
-        }}
-        onRetry={canRetry ? handleRetry : undefined}
-      />
+      {/* Execution Progress - Standard */}
+      {!privacyEnabled && (
+        <ExecutionProgress
+          status={executionStatus}
+          steps={selectedRoute?.steps}
+          stepStatuses={stepExecutions}
+          onClose={() => {
+            resetExecution();
+            if (executionStatus.status === 'completed') {
+              setAmount('');
+              setSelectedRoute(null);
+              refetchRoutes();
+            }
+          }}
+          onRetry={canRetry ? handleRetry : undefined}
+        />
+      )}
+
+      {/* Execution Progress - Privacy */}
+      {privacyEnabled && privacyExecutionState.status !== 'idle' && (
+        <PrivacyProgress
+          executionState={privacyExecutionState}
+          onClose={() => {
+            resetPrivacyExecution();
+            if (privacyExecutionState.status === 'completed') {
+              setAmount('');
+              setSelectedRoute(null);
+              refetchRoutes();
+            }
+          }}
+          onRetry={privacyExecutionState.status === 'failed' ? () => {
+            if (selectedRoute && isPrivacyRoute(selectedRoute)) {
+              executePrivacyRoute(selectedRoute as PrivacyRouteQuote);
+            }
+          } : undefined}
+        />
+      )}
 
       {/* Deposit Modal */}
       {showDepositModal && selectedRoute && (
