@@ -197,6 +197,7 @@ export function useRetryExecution() {
           const approvalTxHash = await approveToken(
             route.fromToken.address as `0x${string}`,
             approvalAddress as `0x${string}`,
+            requiredAmount,
             walletClient
           );
 
@@ -330,15 +331,17 @@ async function checkAllowance(
 async function approveToken(
   tokenAddress: `0x${string}`,
   spenderAddress: `0x${string}`,
+  amount: bigint,
   walletClient: any
 ): Promise<`0x${string}`> {
-  const maxAmount = BigInt('0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff');
+  // Approve exact amount needed (with small buffer for slippage)
+  const approvalAmount = amount + (amount / BigInt(100)); // +1% buffer
   
   const hash = await walletClient.writeContract({
     address: tokenAddress,
     abi: erc20Abi,
     functionName: 'approve',
-    args: [spenderAddress, maxAmount],
+    args: [spenderAddress, approvalAmount],
   });
   
   return hash;
