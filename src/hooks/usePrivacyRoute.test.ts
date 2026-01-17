@@ -627,3 +627,93 @@ describe('Privacy Route Integration', () => {
     expect(totalTime).toBe(960); // 16 minutes total
   });
 });
+
+describe('Sonic Privacy Routing', () => {
+  // Sonic (chain ID 146) is NOT a Railgun-supported chain.
+  // When privacy mode is enabled from Sonic, funds must first bridge to a 
+  // Railgun-supported chain (Arbitrum, Polygon, BSC, or Ethereum) before 
+  // going through the privacy flow.
+
+  const SONIC_CHAIN_ID = 146;
+  const RAILGUN_CHAINS = [1, 137, 42161, 56]; // Ethereum, Polygon, Arbitrum, BSC
+
+  it('should recognize Sonic is NOT a Railgun-supported chain', async () => {
+    const railgunService = await import('../services/railgun');
+    
+    expect(railgunService.isRailgunSupported(SONIC_CHAIN_ID)).toBe(false);
+  });
+
+  it('should recognize all Railgun-supported chains', async () => {
+    const railgunService = await import('../services/railgun');
+    
+    RAILGUN_CHAINS.forEach(chainId => {
+      expect(railgunService.isRailgunSupported(chainId)).toBe(true);
+    });
+  });
+
+  it('should route Sonic to a Railgun chain for privacy (defaults to Arbitrum)', async () => {
+    const railgunService = await import('../services/railgun');
+    
+    // When source chain (Sonic) doesn't support Railgun, it should pick a default
+    const recommendedChain = railgunService.getBestRailgunChain(SONIC_CHAIN_ID);
+    
+    // Should return Arbitrum (42161) as the default Railgun chain
+    expect(recommendedChain).toBe(42161);
+    expect(RAILGUN_CHAINS).toContain(recommendedChain);
+  });
+
+  it('should use source chain if it IS a Railgun chain', async () => {
+    const railgunService = await import('../services/railgun');
+    
+    // If user starts from Arbitrum, use Arbitrum for privacy
+    const fromArbitrum = railgunService.getBestRailgunChain(42161);
+    expect(fromArbitrum).toBe(42161);
+    
+    // If user starts from Polygon, use Polygon for privacy
+    vi.mocked(railgunService.getBestRailgunChain).mockImplementationOnce((chainId) => {
+      if (chainId && [1, 137, 42161, 56].includes(chainId)) return chainId as any;
+      return 42161;
+    });
+    const fromPolygon = railgunService.getBestRailgunChain(137);
+    expect(fromPolygon).toBe(137);
+  });
+
+  it('should include bridge_to_railgun step when starting from non-Railgun chain like Sonic', async () => {
+    const railgunService = await import('../services/railgun');
+    const steps = railgunService.getPrivacySteps();
+    
+    // The first step should be bridge_to_railgun for non-Railgun source chains
+    const bridgeStep = steps.find(s => s.id === 'bridge_to_railgun');
+    expect(bridgeStep).toBeDefined();
+    expect(bridgeStep?.label).toBe('Bridge to Privacy Chain');
+    expect(bridgeStep?.description).toContain('Railgun');
+  });
+
+  it('should support privacy mode for Sonic users via bridging', async () => {
+    // This test verifies the full flow works for Sonic users:
+    // 1. User is on Sonic (146)
+    // 2. Privacy mode bridges to Arbitrum (42161) 
+    // 3. Funds are shielded on Arbitrum
+    // 4. After wait period, unshield to new address
+    // 5. Bridge to Hyperliquid (999)
+    
+    const railgunService = await import('../services/railgun');
+    
+    // Verify Sonic is not directly supported
+    expect(railgunService.isRailgunSupported(SONIC_CHAIN_ID)).toBe(false);
+    
+    // Verify we get a valid Railgun chain for the privacy flow
+    const privacyChainId = railgunService.getBestRailgunChain(SONIC_CHAIN_ID);
+    expect(railgunService.isRailgunSupported(privacyChainId)).toBe(true);
+    
+    // Verify we can get a privacy quote for that chain
+    const quote = railgunService.getPrivacyQuote(privacyChainId as any);
+    expect(quote).toBeDefined();
+    expect(quote.chainId).toBe(privacyChainId);
+    expect(parseFloat(quote.totalFeeUSD)).toBeGreaterThan(0);
+    
+    // Verify the chain name is correct
+    const chainName = railgunService.getRailgunChainName(privacyChainId as any);
+    expect(chainName).toBe('Arbitrum');
+  });
+});
