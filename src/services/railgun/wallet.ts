@@ -161,8 +161,8 @@ function deriveEncryptionKey(address: string): string {
   const hash = ethers.keccak256(
     ethers.toUtf8Bytes(`liquyn_railgun_encryption_${address.toLowerCase()}`)
   );
-  // Use 32 bytes as hex string
-  return hash;
+  // Remove "0x" prefix - SDK expects 64 hex chars (32 bytes)
+  return hash.slice(2);
 }
 
 /**
