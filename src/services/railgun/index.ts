@@ -58,6 +58,7 @@ export {
   isEngineReady,
   subscribeToEngineState,
   loadNetworkProvider,
+  loadAllProviders,
   getRailgunContractAddresses,
   resetEngineState,
 } from './engine';

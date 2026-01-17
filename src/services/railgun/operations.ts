@@ -41,7 +41,8 @@ import {
   RAILGUN_SUPPORTED_CHAIN_IDS,
 } from './types';
 import { getWalletId, isWalletReady, getRailgunAddress } from './wallet';
-import { isEngineReady } from './engine';
+import { isEngineReady, loadNetworkProvider } from './engine';
+import { getChainId } from './types';
 
 /**
  * Gas price estimates by network (in gwei)
@@ -169,6 +170,15 @@ export async function executeShield(
 
   if (!isWalletReady()) {
     return { success: false, error: 'RAILGUN wallet not ready' };
+  }
+
+  // Ensure provider is loaded for the target network
+  const chainId = getChainId(params.networkName);
+  if (chainId) {
+    const providerLoaded = await loadNetworkProvider(chainId);
+    if (!providerLoaded) {
+      console.warn(`[RAILGUN] Could not load provider for ${params.networkName}, continuing anyway`);
+    }
   }
 
   const walletId = getWalletId();
@@ -338,6 +348,15 @@ export async function executeUnshield(
 
   if (!isWalletReady()) {
     return { success: false, error: 'RAILGUN wallet not ready' };
+  }
+
+  // Ensure provider is loaded for the target network
+  const chainId = getChainId(params.networkName);
+  if (chainId) {
+    const providerLoaded = await loadNetworkProvider(chainId);
+    if (!providerLoaded) {
+      console.warn(`[RAILGUN] Could not load provider for ${params.networkName}, continuing anyway`);
+    }
   }
 
   const walletId = getWalletId();

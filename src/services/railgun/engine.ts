@@ -93,7 +93,8 @@ const DEFAULT_POI_NODES = [
 
 /**
  * RPC provider configurations for supported networks
- * Using public RPC endpoints - production should use dedicated providers
+ * Using CORS-friendly public RPC endpoints
+ * Note: For high-volume production use, consider dedicated providers like Alchemy/Infura
  */
 const RPC_PROVIDERS: Record<RailgunChainId, FallbackProviderJsonConfig> = {
   [RAILGUN_SUPPORTED_CHAIN_IDS.ETHEREUM]: {
@@ -103,15 +104,15 @@ const RPC_PROVIDERS: Record<RailgunChainId, FallbackProviderJsonConfig> = {
         provider: 'https://eth.llamarpc.com',
         priority: 1,
         weight: 1,
-        maxLogsPerBatch: 10,
-        stallTimeout: 2500,
+        maxLogsPerBatch: 1, // Reduced to avoid rate limits
+        stallTimeout: 5000,
       },
       {
-        provider: 'https://rpc.ankr.com/eth',
+        provider: 'https://cloudflare-eth.com',
         priority: 2,
         weight: 1,
-        maxLogsPerBatch: 10,
-        stallTimeout: 2500,
+        maxLogsPerBatch: 1,
+        stallTimeout: 5000,
       },
     ],
   },
@@ -119,37 +120,38 @@ const RPC_PROVIDERS: Record<RailgunChainId, FallbackProviderJsonConfig> = {
     chainId: RAILGUN_SUPPORTED_CHAIN_IDS.POLYGON,
     providers: [
       {
-        provider: 'https://polygon.llamarpc.com',
+        provider: 'https://polygon-rpc.com',
         priority: 1,
         weight: 1,
-        maxLogsPerBatch: 10,
-        stallTimeout: 2500,
+        maxLogsPerBatch: 1,
+        stallTimeout: 5000,
       },
       {
-        provider: 'https://rpc.ankr.com/polygon',
+        provider: 'https://polygon.llamarpc.com',
         priority: 2,
         weight: 1,
-        maxLogsPerBatch: 10,
-        stallTimeout: 2500,
+        maxLogsPerBatch: 1,
+        stallTimeout: 5000,
       },
     ],
   },
   [RAILGUN_SUPPORTED_CHAIN_IDS.ARBITRUM]: {
     chainId: RAILGUN_SUPPORTED_CHAIN_IDS.ARBITRUM,
     providers: [
+      // Using CORS-friendly endpoints (arb1.arbitrum.io has CORS issues)
       {
-        provider: 'https://arb1.arbitrum.io/rpc',
+        provider: 'https://arbitrum.llamarpc.com',
         priority: 1,
         weight: 1,
-        maxLogsPerBatch: 10,
-        stallTimeout: 2500,
+        maxLogsPerBatch: 1,
+        stallTimeout: 5000,
       },
       {
-        provider: 'https://rpc.ankr.com/arbitrum',
+        provider: 'https://arb-mainnet.g.alchemy.com/v2/demo',
         priority: 2,
         weight: 1,
-        maxLogsPerBatch: 10,
-        stallTimeout: 2500,
+        maxLogsPerBatch: 1,
+        stallTimeout: 5000,
       },
     ],
   },
@@ -157,18 +159,18 @@ const RPC_PROVIDERS: Record<RailgunChainId, FallbackProviderJsonConfig> = {
     chainId: RAILGUN_SUPPORTED_CHAIN_IDS.BSC,
     providers: [
       {
-        provider: 'https://bsc-dataseed.binance.org',
+        provider: 'https://bsc-dataseed1.defibit.io',
         priority: 1,
         weight: 1,
-        maxLogsPerBatch: 10,
-        stallTimeout: 2500,
+        maxLogsPerBatch: 1,
+        stallTimeout: 5000,
       },
       {
-        provider: 'https://rpc.ankr.com/bsc',
+        provider: 'https://bsc-dataseed2.defibit.io',
         priority: 2,
         weight: 1,
-        maxLogsPerBatch: 10,
-        stallTimeout: 2500,
+        maxLogsPerBatch: 1,
+        stallTimeout: 5000,
       },
     ],
   },
@@ -316,9 +318,8 @@ async function doInitializeEngine(
 
     const walletSource = config?.walletSource ?? 'liquynswap';
     const poiNodeURLs = config?.poiConfig?.nodeURLs ?? DEFAULT_POI_NODES;
-    const shouldDebug = config?.shouldDebug ?? true; // Enable debug by default for troubleshooting
-    
-    console.log('[RAILGUN] Config:', { walletSource, poiNodeURLs, shouldDebug });
+    // Disable verbose debug logging in production
+    const shouldDebug = config?.shouldDebug ?? false;
 
     updateEngineState({ status: 'downloading_artifacts' });
     console.log('[RAILGUN] Calling startRailgunEngine...');
@@ -327,13 +328,15 @@ async function doInitializeEngine(
     console.log('[RAILGUN] Database path:', dbPath);
 
     // Initialize the engine FIRST - callbacks must be set AFTER engine is started
+    // Skip merkletree scans on init to avoid rate limiting from public RPCs
+    // Scans will happen lazily when wallet is loaded and balances are needed
     await startRailgunEngine(
       walletSource,
       dbPath,
       shouldDebug,
       artifactStore,
       false, // useNativeArtifacts - false for browser
-      false, // skipMerkletreeScans - we want full scanning
+      true,  // skipMerkletreeScans - skip to avoid rate limits, scan lazily when needed
       poiNodeURLs,
     );
 
@@ -362,10 +365,17 @@ async function doInitializeEngine(
       }
     });
 
-    console.log('[RAILGUN] Callbacks set, loading providers...');
+    console.log('[RAILGUN] Callbacks set, loading initial provider...');
 
-    // Load providers for all supported networks
-    await loadProvidersForNetworks();
+    // Load only Ethereum provider initially to minimize rate limiting
+    // Other providers will be loaded lazily when needed
+    const defaultChainId = RAILGUN_SUPPORTED_CHAIN_IDS.ETHEREUM;
+    try {
+      await loadNetworkProviderInternal(defaultChainId);
+    } catch (error) {
+      console.warn('[RAILGUN] Initial provider load failed, continuing without:', error);
+      // Don't fail initialization if provider load fails - user can still use privacy mode
+    }
 
     updateEngineState({ status: 'ready' });
     console.log('[RAILGUN] Engine initialized successfully');
@@ -401,56 +411,67 @@ async function doInitializeEngine(
   }
 }
 
-/**
- * Load RPC providers for all supported networks
- */
-async function loadProvidersForNetworks(): Promise<void> {
-  const networks = Object.values(RAILGUN_SUPPORTED_CHAIN_IDS);
-  
-  for (const chainId of networks) {
-    if (!isRailgunSupported(chainId)) continue;
-    
-    const networkName = getNetworkName(chainId);
-    const providerConfig = RPC_PROVIDERS[chainId];
-    
-    // Skip if network not in RAILGUN config
-    if (!NETWORK_CONFIG[networkName]) {
-      console.warn(`[RAILGUN] Network ${networkName} not found in config`);
-      continue;
-    }
-    
-    try {
-      await loadProvider(
-        providerConfig,
-        networkName,
-        10000, // pollingInterval in ms
-      );
-      console.log(`[RAILGUN] Provider loaded for ${networkName}`);
-    } catch (error) {
-      console.warn(`[RAILGUN] Failed to load provider for ${networkName}:`, error);
-      // Continue with other networks even if one fails
-    }
-  }
-}
+// Track which providers have been loaded to avoid re-loading
+const loadedProviders = new Set<RailgunChainId>();
 
 /**
- * Load provider for a specific network
+ * Internal function to load a network provider
  */
-export async function loadNetworkProvider(chainId: RailgunChainId): Promise<boolean> {
+async function loadNetworkProviderInternal(chainId: RailgunChainId): Promise<boolean> {
+  if (loadedProviders.has(chainId)) {
+    return true; // Already loaded
+  }
+
   if (!isRailgunSupported(chainId)) {
-    console.error(`[RAILGUN] Chain ${chainId} is not supported`);
+    console.warn(`[RAILGUN] Chain ${chainId} is not supported`);
     return false;
   }
 
   const networkName = getNetworkName(chainId);
   const providerConfig = RPC_PROVIDERS[chainId];
 
+  // Skip if network not in RAILGUN config
+  if (!NETWORK_CONFIG[networkName]) {
+    console.warn(`[RAILGUN] Network ${networkName} not found in config`);
+    return false;
+  }
+
   try {
-    await loadProvider(providerConfig, networkName, 10000);
+    await loadProvider(
+      providerConfig,
+      networkName,
+      60000, // pollingInterval - increased to reduce RPC calls
+    );
+    loadedProviders.add(chainId);
+    console.log(`[RAILGUN] Provider loaded for ${networkName}`);
     return true;
   } catch (error) {
-    console.error(`[RAILGUN] Failed to load provider for ${networkName}:`, error);
+    console.warn(`[RAILGUN] Failed to load provider for ${networkName}:`, error);
     return false;
+  }
+}
+
+/**
+ * Load provider for a specific network (public API)
+ * Call this before performing privacy operations on a specific chain
+ */
+export async function loadNetworkProvider(chainId: RailgunChainId): Promise<boolean> {
+  if (!isEngineReady()) {
+    console.error('[RAILGUN] Engine not ready, cannot load provider');
+    return false;
+  }
+  return loadNetworkProviderInternal(chainId);
+}
+
+/**
+ * Load RPC providers for all supported networks
+ * Note: This is optional - providers are loaded lazily by default
+ */
+export async function loadAllProviders(): Promise<void> {
+  const networks = Object.values(RAILGUN_SUPPORTED_CHAIN_IDS);
+  
+  for (const chainId of networks) {
+    await loadNetworkProviderInternal(chainId);
   }
 }
 
