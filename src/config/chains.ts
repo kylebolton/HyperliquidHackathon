@@ -1,10 +1,38 @@
 import { defineChain, type Chain } from 'viem';
 import { mainnet, arbitrum, optimism, polygon, base, bsc, avalanche } from 'wagmi/chains';
 
-// Hyperliquid Chain IDs
-// Note: HyperEVM mainnet is 999, testnet is 998
-export const HYPERLIQUID_CHAIN_ID = 999;  // Mainnet (HyperEVM)
-export const HYPERLIQUID_TESTNET_CHAIN_ID = 998; // Testnet
+/**
+ * =============================================================================
+ * HYPERLIQUID LAYER DISTINCTION
+ * =============================================================================
+ * 
+ * Hyperliquid has TWO distinct layers that should not be confused:
+ * 
+ * 1. HyperEVM (Chain ID 999/998)
+ *    - EVM-compatible execution layer
+ *    - Where LI.FI and other bridges deposit tokens
+ *    - Has standard EVM addresses (0x...)
+ *    - Transactions visible on explorer.hyperliquid.xyz
+ *    - This is where USDC arrives when bridging from external chains
+ * 
+ * 2. Hyperliquid L1 (Trading Layer)
+ *    - The actual perps/spot trading platform
+ *    - NOT directly EVM accessible
+ *    - Requires deposit via bridge contract on HyperEVM
+ *    - Where trading actually happens
+ * 
+ * FLOW: External Chain -> HyperEVM (bridge) -> Hyperliquid L1 (deposit contract)
+ * =============================================================================
+ */
+
+// HyperEVM Chain IDs (the EVM-compatible layer)
+// Note: This is where external bridges deposit tokens, NOT the L1 trading layer
+export const HYPERLIQUID_CHAIN_ID = 999;  // HyperEVM Mainnet
+export const HYPERLIQUID_TESTNET_CHAIN_ID = 998; // HyperEVM Testnet
+
+// Alias for clarity - HyperEVM is the EVM layer, distinct from L1
+export const HYPEREVM_CHAIN_ID = HYPERLIQUID_CHAIN_ID;
+export const HYPEREVM_TESTNET_CHAIN_ID = HYPERLIQUID_TESTNET_CHAIN_ID;
 
 // Sonic Chain ID
 export const SONIC_CHAIN_ID = 146;
@@ -35,7 +63,8 @@ export const sonic = {
   iconBackground: '#0a0a0a',
 } as Chain & { iconUrl: string; iconBackground: string };
 
-// Hyperliquid Chain Definition (Mainnet) with RainbowKit icon
+// HyperEVM Chain Definition (Mainnet) with RainbowKit icon
+// This is the EVM layer - tokens bridged here need to be deposited to L1 for trading
 export const hyperliquid = {
   ...defineChain({
     id: HYPERLIQUID_CHAIN_ID,
@@ -61,7 +90,8 @@ export const hyperliquid = {
   iconBackground: '#0a0a0a',
 } as Chain & { iconUrl: string; iconBackground: string };
 
-// Hyperliquid Testnet Chain Definition with RainbowKit icon
+// HyperEVM Testnet Chain Definition with RainbowKit icon
+// This is the EVM layer - tokens bridged here need to be deposited to L1 for trading
 export const hyperliquidTestnet = {
   ...defineChain({
     id: HYPERLIQUID_TESTNET_CHAIN_ID,
@@ -292,4 +322,43 @@ export function getRailgunChainOptions(): Array<{
       recommended: meta.recommendedForPrivacy,
     };
   });
+}
+
+/**
+ * =============================================================================
+ * LAYER HELPER TYPES AND FUNCTIONS
+ * =============================================================================
+ */
+
+/**
+ * Represents the two layers in the Hyperliquid ecosystem
+ */
+export type HyperliquidLayer = 'hyperevm' | 'l1';
+
+/**
+ * Check if a chain ID is HyperEVM (the EVM-compatible layer)
+ */
+export function isHyperEVM(chainId: number): boolean {
+  return chainId === HYPEREVM_CHAIN_ID || chainId === HYPEREVM_TESTNET_CHAIN_ID;
+}
+
+/**
+ * Get the explorer URL for a transaction on HyperEVM
+ * Note: L1 transactions are initiated via contracts on HyperEVM, so they also use this explorer
+ */
+export function getHyperEVMExplorerUrl(txHash: string, isTestnet = false): string {
+  const baseUrl = isTestnet 
+    ? 'https://explorer.hyperliquid-testnet.xyz'
+    : 'https://explorer.hyperliquid.xyz';
+  return `${baseUrl}/tx/${txHash}`;
+}
+
+/**
+ * Get the explorer URL for an address on HyperEVM
+ */
+export function getHyperEVMAddressUrl(address: string, isTestnet = false): string {
+  const baseUrl = isTestnet 
+    ? 'https://explorer.hyperliquid-testnet.xyz'
+    : 'https://explorer.hyperliquid.xyz';
+  return `${baseUrl}/address/${address}`;
 }

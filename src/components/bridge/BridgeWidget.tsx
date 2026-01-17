@@ -11,6 +11,7 @@ import { RouteOptions } from './RouteOptions';
 import { SlippageSettings } from './SlippageSettings';
 import { PrivacyToggle } from './PrivacyToggle';
 import { PrivacyProgress } from './PrivacyProgress';
+import { NetworkSwitchModal } from './NetworkSwitchModal';
 import { DepositToHyperliquid } from '../deposit/DepositToHyperliquid';
 import { Button } from '../ui/Button';
 import { useLiFiRoutes } from '../../hooks/useLiFiQuote';
@@ -18,7 +19,7 @@ import { useRetryExecution } from '../../hooks/useRetryExecution';
 import { usePrivacyRoutes, usePrivacyExecution, isPrivacyRoute } from '../../hooks/usePrivacyRoute';
 import { useTransactionStatus, getStatusMessage } from '../../hooks/useTransactionStatus';
 import { hyperliquidTokens, type Token } from '../../config/tokens';
-import { HYPERLIQUID_CHAIN_ID, sourceSelectorChains } from '../../config/chains';
+import { HYPERLIQUID_CHAIN_ID, sourceSelectorChains, chainMetadata } from '../../config/chains';
 import type { Quote, PrivacyRouteQuote } from '../../types';
 
 type ButtonState = {
@@ -49,6 +50,7 @@ export function BridgeWidget() {
   const [slippage, setSlippage] = useState(1.0); // 1% default slippage
   const [autoDeposit, setAutoDeposit] = useState(false);
   const [showDepositModal, setShowDepositModal] = useState(false);
+  const [showNetworkSwitchModal, setShowNetworkSwitchModal] = useState(false);
   const [selectedRoute, setSelectedRoute] = useState<Quote | null>(null);
   const [privacyEnabled, setPrivacyEnabled] = useState(false);
 
@@ -184,6 +186,10 @@ export function BridgeWidget() {
   const fromChainName = fromChainKey 
     ? sourceSelectorChains.find(c => c.key === fromChainKey)?.name 
     : sourceSelectorChains.find(c => c.id === fromChainId)?.name;
+  
+  // Get chain info for modal
+  const fromChainLogo = fromChainId ? chainMetadata[fromChainId]?.logo : undefined;
+  const currentChainName = connectedChainId ? chainMetadata[connectedChainId]?.name : undefined;
 
   // Reset token when chain changes
   useEffect(() => {
@@ -213,7 +219,7 @@ export function BridgeWidget() {
       return { text: 'Insufficient Balance', disabled: true, variant: 'error' };
     }
     if (isWrongNetwork) {
-      return { text: `Switch to ${fromChainName || 'Source Chain'}`, disabled: false, variant: 'warning' };
+      return { text: `Switch to ${fromChainName || 'Source Chain'}`, disabled: false, variant: 'primary' };
     }
     if (isLoadingRoutes) {
       return { text: 'Finding Best Routes...', disabled: true, variant: 'primary', showLoader: true };
@@ -241,10 +247,18 @@ export function BridgeWidget() {
     privacyEnabled, isPrivacyExecuting
   ]);
 
+  // Handle network switch from modal
+  const handleNetworkSwitch = () => {
+    if (fromChainId) {
+      switchChain?.({ chainId: fromChainId as 1 | 10 | 42161 | 137 | 8453 | 56 | 43114 | 998 });
+    }
+    setShowNetworkSwitchModal(false);
+  };
+
   // Handle bridge execution or network switch
   const handleBridge = async () => {
     if (isWrongNetwork && fromChainId) {
-      switchChain?.({ chainId: fromChainId as 1 | 10 | 42161 | 137 | 8453 | 56 | 43114 | 998 });
+      setShowNetworkSwitchModal(true);
       return;
     }
     if (!selectedRoute) return;
@@ -478,13 +492,18 @@ export function BridgeWidget() {
           {/* Auto-Deposit Toggle */}
           {toToken.symbol === 'USDC' && (
             <div className="flex items-center justify-between p-3 bg-dark-700/50 rounded-xl border border-dark-400/20">
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-white/70">Auto-deposit to Hyperliquid</span>
+              <div className="flex-1">
+                <span className="text-sm text-white/90">Auto-deposit to trading</span>
+                <p className="text-[11px] text-white/40 mt-0.5">
+                  {autoDeposit 
+                    ? 'USDC will be ready to trade immediately'
+                    : 'You can deposit manually after bridging'}
+                </p>
               </div>
               <button
                 onClick={() => setAutoDeposit(!autoDeposit)}
                 className={cn(
-                  'relative w-10 h-5 rounded-full transition-colors duration-200',
+                  'relative w-10 h-5 rounded-full transition-colors duration-200 ml-3',
                   autoDeposit ? 'bg-accent' : 'bg-dark-500'
                 )}
               >
@@ -630,6 +649,16 @@ export function BridgeWidget() {
           } : undefined}
         />
       )}
+
+      {/* Network Switch Modal */}
+      <NetworkSwitchModal
+        isOpen={showNetworkSwitchModal}
+        onClose={() => setShowNetworkSwitchModal(false)}
+        onSwitch={handleNetworkSwitch}
+        fromChainName={fromChainName || 'Unknown Chain'}
+        fromChainLogo={fromChainLogo}
+        currentChainName={currentChainName}
+      />
 
       {/* Deposit Modal */}
       {showDepositModal && selectedRoute && (
