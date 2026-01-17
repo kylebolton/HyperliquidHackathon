@@ -183,9 +183,6 @@ describe('Privacy Route Debug - Arbitrum to Hyperliquid', () => {
   });
 
   it('should check what token address we are actually using', async () => {
-    // Import the actual service to see what addresses it uses
-    const { fetchRoutes } = await import('./lifi');
-    
     console.log('Configured USDC addresses:');
     console.log('- Arbitrum USDC:', ARBITRUM_USDC);
     console.log('- Hyperliquid USDC (our config):', HYPERLIQUID_USDC);
