@@ -9,8 +9,9 @@ import {
 } from './hyperliquid';
 
 // Contract addresses used in the service
-const HYPERLIQUID_BRIDGE_ADDRESS = '0x2Df1c51E09aECF9cacB7bc98cB1742757f163dF7';
-const USDC_HYPEREVM_ADDRESS = '0xeb62eee3685fc4c43992febcd9e75443aef550ab';
+// Updated to correct addresses from Chainstack/Circle docs
+const HYPERLIQUID_BRIDGE_ADDRESS = '0x6b9e773128f453f5c2c60935ee2de2cbc5390a24';
+const USDC_HYPEREVM_ADDRESS = '0xb88339CB7199b77E23DB6E890353E22632Ba630f';
 
 // Mock user address
 const MOCK_USER_ADDRESS = '0x1234567890123456789012345678901234567890' as `0x${string}`;
@@ -413,13 +414,15 @@ describe('Hyperliquid Service - HyperEVM to L1 Deposit', () => {
 });
 
 describe('Contract Address Constants', () => {
-  it('should use correct bridge contract address', () => {
+  it('should use correct bridge contract address (CoreDepositWallet)', () => {
     // This is the canonical bridge address for HyperEVM -> Hyperliquid L1
-    expect(HYPERLIQUID_BRIDGE_ADDRESS).toBe('0x2Df1c51E09aECF9cacB7bc98cB1742757f163dF7');
+    // Source: https://docs.chainstack.com/docs/hyperliquid-bridging-usdc
+    expect(HYPERLIQUID_BRIDGE_ADDRESS).toBe('0x6b9e773128f453f5c2c60935ee2de2cbc5390a24');
   });
 
-  it('should use correct USDC address on HyperEVM', () => {
-    // This is USDC on HyperEVM (chain 999), not to be confused with L1
-    expect(USDC_HYPEREVM_ADDRESS).toBe('0xeb62eee3685fc4c43992febcd9e75443aef550ab');
+  it('should use correct USDC address on HyperEVM (Native USDC by Circle)', () => {
+    // This is native USDC on HyperEVM (chain 999)
+    // Source: https://www.circle.com/multi-chain-usdc/hyperevm
+    expect(USDC_HYPEREVM_ADDRESS).toBe('0xb88339CB7199b77E23DB6E890353E22632Ba630f');
   });
 });

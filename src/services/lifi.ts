@@ -23,15 +23,6 @@ export async function discoverHyperliquidChainId(): Promise<number> {
     const chains = await getChains();
     cachedLiFiChains = chains;
     
-    // Log all chains for debugging - search for anything with "hyp" to help find it
-    const possibleMatches = chains.filter(c => 
-      c.name.toLowerCase().includes('hyp') || 
-      c.key?.toLowerCase().includes('hyp') ||
-      c.id === 998 || c.id === 999
-    );
-    console.log('[LI.FI] Possible Hyperliquid matches:', possibleMatches.map(c => ({ id: c.id, name: c.name, key: c.key })));
-    console.log('[LI.FI] Total available chains:', chains.length);
-    
     // Search for Hyperliquid with various possible identifiers
     const hyperliquid = chains.find(c => 
       c.name.toLowerCase() === 'hyperliquid' ||
@@ -45,7 +36,6 @@ export async function discoverHyperliquidChainId(): Promise<number> {
     );
     
     if (hyperliquid) {
-      console.log('[LI.FI] ✓ Found Hyperliquid chain:', { id: hyperliquid.id, name: hyperliquid.name, key: hyperliquid.key });
       cachedHyperliquidChainId = hyperliquid.id;
       return hyperliquid.id;
     }
@@ -53,16 +43,13 @@ export async function discoverHyperliquidChainId(): Promise<number> {
     // If not found by name, try searching by chain ID 999 (mainnet)
     const byId = chains.find(c => c.id === 999);
     if (byId) {
-      console.log('[LI.FI] ✓ Found chain ID 999 (mainnet):', { id: byId.id, name: byId.name, key: byId.key });
       cachedHyperliquidChainId = byId.id;
       return byId.id;
     }
     
-    console.warn('[LI.FI] Hyperliquid not found by name or ID. Using fallback chain ID:', HYPERLIQUID_CHAIN_ID);
     cachedHyperliquidChainId = HYPERLIQUID_CHAIN_ID;
     return HYPERLIQUID_CHAIN_ID;
-  } catch (error) {
-    console.error('[LI.FI] Error fetching chains:', error);
+  } catch {
     cachedHyperliquidChainId = HYPERLIQUID_CHAIN_ID;
     return HYPERLIQUID_CHAIN_ID;
   }
@@ -81,14 +68,11 @@ export async function getHyperliquidTokens(): Promise<LiFiToken[]> {
 
   try {
     const chainId = await discoverHyperliquidChainId();
-    console.log('[LI.FI] Fetching tokens for Hyperliquid chain ID:', chainId);
     const result = await getTokens({ chains: [chainId] });
     const tokens = result.tokens[chainId] || [];
-    console.log('[LI.FI] Available Hyperliquid tokens:', tokens.map(t => ({ symbol: t.symbol, address: t.address })));
     cachedHyperliquidTokens = tokens;
     return tokens;
-  } catch (error) {
-    console.error('[LI.FI] Error fetching Hyperliquid tokens:', error);
+  } catch {
     return [];
   }
 }
@@ -173,8 +157,6 @@ function convertApiRouteToQuote(route: LiFiRoute): Quote {
     _rawRoute: route, // Store the raw API route for direct execution
   };
 
-  console.log('[LI.FI API] Converted quote - toToken:', route.toToken.symbol, route.toToken.address);
-  
   return quote;
 }
 
@@ -301,7 +283,6 @@ export async function fetchRoutes(
     
     // First, get available tokens on Hyperliquid from LI.FI
     const hlTokens = await getHyperliquidTokens();
-    console.log('[LI.FI] Available Hyperliquid tokens from LI.FI:', hlTokens.map(t => ({ symbol: t.symbol, address: t.address })));
     
     // Find the matching destination token
     // For USDC, we want to find LI.FI's USDC token on Hyperliquid
@@ -309,12 +290,6 @@ export async function fetchRoutes(
     let resolvedToTokenAddress = toTokenAddress;
     const isLookingForUsdc = toTokenAddress.toLowerCase() === '0xeb62eee3685fc4c43992febcd9e75443aef550ab';
     const isLookingForNative = toTokenAddress.toLowerCase() === '0x0000000000000000000000000000000000000000';
-    
-    console.log('[LI.FI] Token resolution:', { 
-      requestedAddress: toTokenAddress, 
-      isLookingForUsdc, 
-      isLookingForNative 
-    });
     
     if (isLookingForUsdc) {
       // Find USDC on Hyperliquid from LI.FI's token list
@@ -324,9 +299,6 @@ export async function fetchRoutes(
       );
       if (lifiUsdc) {
         resolvedToTokenAddress = lifiUsdc.address;
-        console.log('[LI.FI] ✓ Resolved USDC to LI.FI address:', lifiUsdc.address);
-      } else {
-        console.log('[LI.FI] ⚠ No USDC found on Hyperliquid from LI.FI, using original address');
       }
     } else if (isLookingForNative) {
       // For native token (HYPE), first check if LI.FI has a specific token representation
@@ -337,23 +309,11 @@ export async function fetchRoutes(
       );
       if (lifiHype) {
         resolvedToTokenAddress = lifiHype.address;
-        console.log('[LI.FI] ✓ Resolved HYPE to LI.FI address:', lifiHype.address, 'symbol:', lifiHype.symbol);
       } else {
         // Fallback to native zero address
         resolvedToTokenAddress = '0x0000000000000000000000000000000000000000';
-        console.log('[LI.FI] ✓ Using native zero address for HYPE');
       }
-    } else {
-      console.log('[LI.FI] Using provided token address as-is:', toTokenAddress);
     }
-    
-    console.log('[LI.FI] Fetching routes via REST API:', { 
-      fromChainId, 
-      toChainId, 
-      fromTokenAddress, 
-      toTokenAddress: resolvedToTokenAddress,
-      fromAmount,
-    });
     
     // Use direct REST API instead of SDK to bypass potential SDK bugs
     const { getRoutesApi } = await import('./lifi-api');
@@ -368,17 +328,9 @@ export async function fetchRoutes(
       slippage: slippage / 100,
     });
     
-    console.log('[LI.FI] Routes found:', result.routes.length);
-    
-    if (result.routes.length > 0) {
-      // Log the actual toToken address that LI.FI returned
-      console.log('[LI.FI] Route toToken from response:', result.routes[0].toToken);
-    }
-    
     return result.routes.map(convertApiRouteToQuote);
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
-    console.error('[LI.FI] Error fetching routes:', message, error);
     
     // Re-throw with cleaner message for UI
     if (message.includes('toChainId') || message.includes('allowed values')) {

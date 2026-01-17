@@ -148,11 +148,6 @@ async function lifiRequest<T>(
     ...options.headers,
   };
 
-  console.log(`[LI.FI API] ${options.method || 'GET'} ${endpoint}`);
-  if (options.body) {
-    console.log('[LI.FI API] Request body:', JSON.parse(options.body as string));
-  }
-
   const response = await fetch(url, {
     ...options,
     headers,
@@ -161,11 +156,9 @@ async function lifiRequest<T>(
   const data = await response.json();
   
   if (!response.ok) {
-    console.error('[LI.FI API] Error response:', data);
     throw new Error(data.message || `API error: ${response.status}`);
   }
 
-  console.log('[LI.FI API] Response:', data);
   return data as T;
 }
 
@@ -240,8 +233,6 @@ export async function getRoutesApi(params: {
     },
   };
 
-  console.log('[LI.FI API] Getting routes with params:', requestBody);
-
   return lifiRequest<LiFiRoutesResponse>('/advanced/routes', {
     method: 'POST',
     body: JSON.stringify(requestBody),
@@ -274,8 +265,6 @@ export async function getStepTransaction(step: LiFiStep): Promise<LiFiStep> {
     integrator: 'liquyn-swap',
     includedSteps: [includedStep],
   };
-  
-  console.log('[LI.FI API] Step transaction request:', stepRequest);
   
   return lifiRequest<LiFiStep>('/advanced/stepTransaction', {
     method: 'POST',
@@ -310,7 +299,6 @@ export async function getTransactionStatus(params: {
 export async function getHyperliquidUsdcAddress(): Promise<string | null> {
   try {
     const tokens = await getTokensOnChain(HYPERLIQUID_CHAIN_ID);
-    console.log('[LI.FI API] Hyperliquid tokens:', tokens.map(t => ({ symbol: t.symbol, address: t.address })));
     
     const usdc = tokens.find(t => 
       t.symbol.toUpperCase() === 'USDC' || 
@@ -318,34 +306,28 @@ export async function getHyperliquidUsdcAddress(): Promise<string | null> {
     );
     
     return usdc?.address || null;
-  } catch (error) {
-    console.error('[LI.FI API] Error fetching Hyperliquid tokens:', error);
+  } catch {
     return null;
   }
 }
 
 /**
  * Debug function to inspect what LI.FI returns for Hyperliquid
+ * Note: This function is for development/debugging only
  */
-export async function debugHyperliquidSupport(): Promise<void> {
-  console.log('=== LI.FI Hyperliquid Debug ===');
+export async function debugHyperliquidSupport(): Promise<{
+  chain: any | undefined;
+  tokens: LiFiToken[];
+}> {
+  const chains = await getSupportedChains();
+  const hlChain = chains.find((c: any) => 
+    c.id === HYPERLIQUID_CHAIN_ID || 
+    c.name?.toLowerCase().includes('hyperliquid')
+  );
   
-  try {
-    // Check chains
-    const chains = await getSupportedChains();
-    const hlChain = chains.find((c: any) => 
-      c.id === HYPERLIQUID_CHAIN_ID || 
-      c.name?.toLowerCase().includes('hyperliquid')
-    );
-    console.log('[DEBUG] Hyperliquid chain from LI.FI:', hlChain);
-    
-    // Check tokens
-    const tokens = await getTokensOnChain(HYPERLIQUID_CHAIN_ID);
-    console.log('[DEBUG] Tokens on Hyperliquid:', tokens);
-    
-  } catch (error) {
-    console.error('[DEBUG] Error:', error);
-  }
+  const tokens = await getTokensOnChain(HYPERLIQUID_CHAIN_ID);
+  
+  return { chain: hlChain, tokens };
 }
 
 /**
@@ -384,8 +366,8 @@ export async function fetchRoutesWithTransaction(params: {
     try {
       const stepWithTx = await getStepTransaction(bestRoute.steps[0]);
       bestRoute.steps[0] = stepWithTx;
-    } catch (error) {
-      console.warn('[LI.FI API] Could not get transaction data:', error);
+    } catch {
+      // Transaction data fetch failed, continue with original step
     }
   }
 

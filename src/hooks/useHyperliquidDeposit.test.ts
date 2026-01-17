@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useHyperliquidDeposit, useHyperliquidBalance } from './useHyperliquidDeposit';
-import { HYPERLIQUID_CHAIN_ID } from '../config/chains';
 
 // Track usePublicClient calls to verify chain ID
 const mockUsePublicClient = vi.fn();

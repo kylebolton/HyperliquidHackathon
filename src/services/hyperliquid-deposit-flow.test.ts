@@ -42,7 +42,7 @@ const HYPEREVM_CHAIN_ID = 999;
 const ARBITRUM_CHAIN_ID = 42161;
 const MOCK_USER = '0x1234567890123456789012345678901234567890' as `0x${string}`;
 const USDC_ON_ARBITRUM = '0xaf88d065e77c8cC2239327C5EDb3A432268e5831';
-const USDC_ON_HYPEREVM = '0xeb62eee3685fc4c43992febcd9e75443aef550ab';
+const USDC_ON_HYPEREVM = '0xb88339CB7199b77E23DB6E890353E22632Ba630f';
 
 describe('End-to-End Deposit Flow: External Chain -> HyperEVM -> Hyperliquid L1', () => {
   beforeEach(() => {
@@ -374,10 +374,10 @@ describe('End-to-End Deposit Flow: External Chain -> HyperEVM -> Hyperliquid L1'
 });
 
 describe('USDC Token Address Verification', () => {
-  it('should use correct USDC address on HyperEVM', () => {
-    // This address is USDC on HyperEVM (chain 999)
-    // It's different from USDC on other chains
-    expect(USDC_ON_HYPEREVM.toLowerCase()).toBe('0xeb62eee3685fc4c43992febcd9e75443aef550ab');
+  it('should use correct USDC address on HyperEVM (Native USDC by Circle)', () => {
+    // This address is native USDC on HyperEVM (chain 999)
+    // Source: https://www.circle.com/multi-chain-usdc/hyperevm
+    expect(USDC_ON_HYPEREVM.toLowerCase()).toBe('0xb88339cb7199b77e23db6e890353e22632ba630f');
   });
 
   it('should differentiate between chain-specific USDC addresses', () => {
@@ -387,7 +387,7 @@ describe('USDC Token Address Verification', () => {
     // Arbitrum USDC (native)
     expect(USDC_ON_ARBITRUM).toBe('0xaf88d065e77c8cC2239327C5EDb3A432268e5831');
     
-    // HyperEVM USDC
-    expect(USDC_ON_HYPEREVM).toBe('0xeb62eee3685fc4c43992febcd9e75443aef550ab');
+    // HyperEVM Native USDC (Circle)
+    expect(USDC_ON_HYPEREVM).toBe('0xb88339CB7199b77E23DB6E890353E22632Ba630f');
   });
 });

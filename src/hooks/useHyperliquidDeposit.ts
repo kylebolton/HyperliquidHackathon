@@ -104,8 +104,8 @@ export function useHyperliquidBalance() {
     try {
       const balanceRaw = await checkUSDCBalance(hyperliquidPublicClient as PublicClient, address);
       setBalance((Number(balanceRaw) / 1e6).toString());
-    } catch (error) {
-      console.error('Error fetching balance:', error);
+    } catch {
+      // Balance fetch failed silently
     } finally {
       setIsLoading(false);
     }

@@ -1,12 +1,14 @@
 import { type WalletClient, type PublicClient, parseUnits } from 'viem';
 import { hyperliquid } from '../config/chains';
 
-// Hyperliquid Bridge contract address
-// This is the bridge contract that allows depositing to L1 trading
-const HYPERLIQUID_BRIDGE_ADDRESS = '0x2Df1c51E09aECF9cacB7bc98cB1742757f163dF7' as const;
+// Hyperliquid Bridge contract address (CoreDepositWallet)
+// This is the bridge contract that allows depositing native USDC to HyperCore L1 trading
+// Source: https://docs.chainstack.com/docs/hyperliquid-bridging-usdc
+const HYPERLIQUID_BRIDGE_ADDRESS = '0x6b9e773128f453f5c2c60935ee2de2cbc5390a24' as const;
 
-// USDC address on Hyperliquid
-const USDC_HYPERLIQUID_ADDRESS = '0xeb62eee3685fc4c43992febcd9e75443aef550ab' as const;
+// Native USDC address on HyperEVM (Circle's ERC-20 implementation)
+// Source: https://www.circle.com/multi-chain-usdc/hyperevm
+const USDC_HYPERLIQUID_ADDRESS = '0xb88339CB7199b77E23DB6E890353E22632Ba630f' as const;
 
 // ERC20 ABI for approval
 const ERC20_ABI = [
@@ -69,8 +71,7 @@ export async function checkUSDCBalance(
       args: [userAddress],
     });
     return balance as bigint;
-  } catch (error) {
-    console.error('Error checking USDC balance:', error);
+  } catch {
     return BigInt(0);
   }
 }
@@ -91,8 +92,7 @@ export async function checkAllowance(
       args: [userAddress, HYPERLIQUID_BRIDGE_ADDRESS],
     });
     return (allowance as bigint) >= amount;
-  } catch (error) {
-    console.error('Error checking allowance:', error);
+  } catch {
     return false;
   }
 }
@@ -123,7 +123,6 @@ export async function approveUSDC(
     return { success: true, txHash: hash };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Approval failed';
-    console.error('Error approving USDC:', error);
     return { success: false, error: errorMessage };
   }
 }
@@ -186,7 +185,6 @@ export async function depositToHyperliquid(
 
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Deposit failed';
-    console.error('Error depositing to Hyperliquid:', error);
     onStatusUpdate?.('failed', errorMessage);
     return { success: false, error: errorMessage };
   }
@@ -212,8 +210,7 @@ export async function estimateDepositGas(
     });
 
     return gas;
-  } catch (error) {
-    console.error('Error estimating gas:', error);
+  } catch {
     return null;
   }
 }

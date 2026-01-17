@@ -138,12 +138,6 @@ export function useRetryExecution() {
     }));
 
     try {
-      console.log('[LI.FI Retry Execution] Starting with route:', { 
-        id: route.id, 
-        fromChain: route.fromChainId,
-        toChain: route.toChainId,
-      });
-
       // Update step status to active
       setState(prev => ({
         ...prev,
@@ -372,10 +366,8 @@ async function pollBridgeStatus(
       if (status.status === 'FAILED') {
         throw new Error(status.substatusMessage || 'Bridge transaction failed');
       }
-    } catch (error: any) {
-      if (!error.message?.includes('NOT_FOUND')) {
-        console.warn('[LI.FI Retry Execution] Status check error:', error);
-      }
+    } catch {
+      // Status endpoint might return 404 initially, that's ok
     }
 
     polls++;

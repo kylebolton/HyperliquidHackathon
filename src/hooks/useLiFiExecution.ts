@@ -52,14 +52,6 @@ export function useLiFiExecution() {
       
       const route = quoteWithRoute._rawRoute;
       
-      console.log('[LI.FI Execution] Starting execution with route:', { 
-        id: route.id, 
-        fromChain: route.fromChainId,
-        toChain: route.toChainId,
-        fromToken: route.fromToken?.symbol,
-        toToken: route.toToken?.symbol,
-      });
-
       // Use the /quote endpoint to get fresh transaction data
       // This is more reliable than stepTransaction
       setStatus({
@@ -68,8 +60,6 @@ export function useLiFiExecution() {
         totalSteps: 1,
       });
 
-      console.log('[LI.FI Execution] Fetching quote with transaction data...');
-      
       const quoteResponse = await getQuoteApi({
         fromChain: route.fromChainId,
         toChain: route.toChainId,
@@ -79,8 +69,6 @@ export function useLiFiExecution() {
         fromAddress: address,
         slippage: 0.01,
       });
-
-      console.log('[LI.FI Execution] Quote response:', quoteResponse);
 
       if (!quoteResponse.transactionRequest) {
         throw new Error('No transaction data in quote response');
@@ -103,7 +91,6 @@ export function useLiFiExecution() {
         const requiredAmount = BigInt(route.fromAmount);
         
         if (allowance < requiredAmount) {
-          console.log('[LI.FI Execution] Approval needed, requesting...');
           setStatus({
             status: 'signing',
             currentStep: 1,
@@ -118,13 +105,10 @@ export function useLiFiExecution() {
             walletClient
           );
 
-          console.log('[LI.FI Execution] Approval tx:', approvalTxHash);
-
           // Wait for approval confirmation
           await publicClient.waitForTransactionReceipt({
             hash: approvalTxHash,
           });
-          console.log('[LI.FI Execution] Approval confirmed');
         }
       }
 
@@ -135,20 +119,12 @@ export function useLiFiExecution() {
         totalSteps: 1,
       });
 
-      console.log('[LI.FI Execution] Sending transaction:', {
-        to: txRequest.to,
-        value: txRequest.value,
-        chainId: txRequest.chainId,
-      });
-
       const txHash = await walletClient.sendTransaction({
         to: txRequest.to as `0x${string}`,
         data: txRequest.data as `0x${string}`,
         value: BigInt(txRequest.value || '0'),
         chain: undefined, // Use connected chain
       });
-
-      console.log('[LI.FI Execution] Transaction sent:', txHash);
 
       setStatus({
         status: 'processing',
@@ -162,15 +138,12 @@ export function useLiFiExecution() {
         hash: txHash,
       });
 
-      console.log('[LI.FI Execution] Transaction confirmed:', receipt.status);
-
       if (receipt.status === 'reverted') {
         throw new Error('Transaction reverted');
       }
 
       // For cross-chain transactions, poll for bridge completion
       if (route.fromChainId !== route.toChainId) {
-        console.log('[LI.FI Execution] Waiting for bridge completion...');
         await pollBridgeStatus(
           txHash,
           route.fromChainId,
@@ -196,7 +169,6 @@ export function useLiFiExecution() {
       return true;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Execution failed';
-      console.error('[LI.FI Execution] Error:', errorMessage, error);
       
       setStatus({
         status: 'failed',
@@ -284,7 +256,6 @@ async function pollBridgeStatus(
         bridge,
       });
 
-      console.log('[LI.FI Execution] Bridge status:', status.status, status.substatus);
       onUpdate();
 
       if (status.status === 'DONE') {
@@ -294,11 +265,8 @@ async function pollBridgeStatus(
       if (status.status === 'FAILED') {
         throw new Error(status.substatusMessage || 'Bridge transaction failed');
       }
-    } catch (error: any) {
+    } catch {
       // Status endpoint might return 404 initially, that's ok
-      if (!error.message?.includes('NOT_FOUND')) {
-        console.warn('[LI.FI Execution] Status check error:', error);
-      }
     }
 
     polls++;
@@ -306,5 +274,4 @@ async function pollBridgeStatus(
   }
 
   // Timeout - but transaction might still complete
-  console.warn('[LI.FI Execution] Status polling timed out');
 }
