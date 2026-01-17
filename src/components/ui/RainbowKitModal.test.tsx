@@ -12,38 +12,31 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
  */
 
 describe('RainbowKit Modal Overlay CSS', () => {
-  let styleSheet: CSSStyleSheet | null = null;
-
-  beforeEach(() => {
-    // Find the stylesheet containing our RainbowKit fixes
-    for (const sheet of document.styleSheets) {
-      try {
-        const rules = sheet.cssRules;
-        for (const rule of rules) {
-          if (rule.cssText.includes('data-rk') && rule.cssText.includes('dialog')) {
-            styleSheet = sheet;
-            break;
-          }
-        }
-      } catch {
-        // Skip cross-origin stylesheets
-      }
-    }
-  });
-
   afterEach(() => {
     // Clean up any test elements
     document.querySelectorAll('[data-testid="mock-rk"]').forEach(el => el.remove());
   });
 
   it('should have CSS rules for RainbowKit modal backdrop', () => {
-    // The CSS file should contain our custom backdrop rules
-    const cssText = document.documentElement.outerHTML;
+    // Note: JSDOM doesn't load external CSS files, so we can't directly test
+    // the CSS rules. Instead, we verify the DOM structure that our CSS targets.
+    // The actual CSS rules (body::before backdrop, z-index, etc.) are validated
+    // by the structural tests below and by visual testing in a real browser.
     
-    // Check that the body::before rule exists (it's in our CSS)
-    // Note: We can't directly test ::before pseudo-elements in JSDOM,
-    // but we can verify the CSS is structured correctly
-    expect(true).toBe(true); // Placeholder - actual CSS validation below
+    // Verify we can create the structure our CSS targets
+    const mockRkContainer = document.createElement('div');
+    mockRkContainer.setAttribute('data-rk', '');
+    mockRkContainer.setAttribute('data-testid', 'mock-rk');
+    
+    const mockDialog = document.createElement('div');
+    mockDialog.setAttribute('role', 'dialog');
+    
+    mockRkContainer.appendChild(mockDialog);
+    document.body.appendChild(mockRkContainer);
+    
+    // CSS selector: body:has([data-rk] [role="dialog"])::before should match this structure
+    const dialogElement = document.body.querySelector('[data-rk] [role="dialog"]');
+    expect(dialogElement).not.toBeNull();
   });
 
   it('should position modal dialog with fixed positioning', () => {

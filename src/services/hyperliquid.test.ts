@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { parseUnits } from 'viem';
 import {
   checkUSDCBalance,
@@ -185,7 +185,7 @@ describe('Hyperliquid Service - HyperEVM to L1 Deposit', () => {
 
     it('should complete full deposit flow: balance -> approval -> deposit', async () => {
       const statusUpdates: string[] = [];
-      const onStatusUpdate = (status: string, message?: string) => {
+      const onStatusUpdate = (status: string) => {
         statusUpdates.push(status);
       };
 
@@ -215,7 +215,7 @@ describe('Hyperliquid Service - HyperEVM to L1 Deposit', () => {
       );
 
       expect(depositCall).toBeDefined();
-      expect(depositCall[0].address.toLowerCase()).toBe(HYPERLIQUID_BRIDGE_ADDRESS.toLowerCase());
+      expect(depositCall![0].address.toLowerCase()).toBe(HYPERLIQUID_BRIDGE_ADDRESS.toLowerCase());
     });
 
     it('should return failure on insufficient balance', async () => {
@@ -385,7 +385,8 @@ describe('Hyperliquid Service - HyperEVM to L1 Deposit', () => {
       const depositCall = mockWalletClient.writeContract.mock.calls.find(
         call => call[0].functionName === 'depositUsdc'
       );
-      expect(depositCall[0].address).toBe(HYPERLIQUID_BRIDGE_ADDRESS);
+      expect(depositCall).toBeDefined();
+      expect(depositCall![0].address).toBe(HYPERLIQUID_BRIDGE_ADDRESS);
     });
 
     it('should verify deposit amounts use correct decimals (6 for USDC)', async () => {
@@ -404,8 +405,9 @@ describe('Hyperliquid Service - HyperEVM to L1 Deposit', () => {
       const depositCall = mockWalletClient.writeContract.mock.calls.find(
         call => call[0].functionName === 'depositUsdc'
       );
+      expect(depositCall).toBeDefined();
       // 100 USDC = 100 * 10^6 = 100000000
-      expect(depositCall[0].args[0]).toBe(parseUnits('100', 6));
+      expect(depositCall![0].args[0]).toBe(parseUnits('100', 6));
     });
   });
 });
