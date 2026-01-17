@@ -100,6 +100,7 @@ export function BridgeWidget() {
     standardRoutes: privacyStandardRoutes,
     privacyRoutes,
     isLoading: isLoadingPrivacyRoutes,
+    isFetched: isPrivacyRoutesFetched,
     error: privacyRouteError,
     refetch: refetchPrivacyRoutes,
   } = usePrivacyRoutes({
@@ -123,7 +124,7 @@ export function BridgeWidget() {
 
   const isLoadingRoutes = privacyEnabled ? isLoadingPrivacyRoutes : isLoadingStandardRoutes;
   const routeError = privacyEnabled ? privacyRouteError : standardRouteError;
-  const isRoutesFetched = privacyEnabled ? (privacyRoutes.length > 0 || privacyStandardRoutes.length > 0) : isStandardRoutesFetched;
+  const isRoutesFetched = privacyEnabled ? isPrivacyRoutesFetched : isStandardRoutesFetched;
   
   const refetchRoutes = () => {
     if (privacyEnabled) {

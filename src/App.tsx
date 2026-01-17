@@ -4,6 +4,7 @@ import { WagmiProvider } from 'wagmi';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { motion, useScroll, useTransform, type Variants } from 'motion/react';
 import { useRef } from 'react';
+import { Lock } from 'lucide-react';
 import { config } from './config/wagmi';
 import { Layout } from './components/layout/Layout';
 import { BridgeWidget } from './components/bridge/BridgeWidget';
@@ -155,6 +156,36 @@ function AppContent() {
                 >
                   <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-white mb-3">
                     <AnimatedText text="Bridge to Hyperliquid" accentWord="Hyperliquid" />
+                    <motion.span
+                      initial={{ opacity: 0, x: -10, filter: 'blur(4px)' }}
+                      animate={{ opacity: 1, x: 0, filter: 'blur(0px)' }}
+                      transition={{ 
+                        delay: 1.2, 
+                        duration: 0.6,
+                        type: 'spring',
+                        stiffness: 120,
+                        damping: 20,
+                      }}
+                      className="inline-flex items-baseline gap-3 ml-4"
+                    >
+                      <span className="italic font-medium text-accent">
+                        privately
+                      </span>
+                      <motion.span
+                        initial={{ opacity: 0, scale: 0, rotate: -180 }}
+                        animate={{ opacity: 1, scale: 1, rotate: 0 }}
+                        transition={{ 
+                          delay: 1.6,
+                          duration: 0.5,
+                          type: 'spring',
+                          stiffness: 200,
+                          damping: 15,
+                        }}
+                        className="inline-flex items-center"
+                      >
+                        <Lock className="w-6 h-6 sm:w-7 sm:h-7 lg:w-8 lg:h-8 text-accent/80 translate-y-0.5" />
+                      </motion.span>
+                    </motion.span>
                   </h1>
                 </motion.div>
 

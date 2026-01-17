@@ -268,6 +268,207 @@ describe('usePrivacyRoutes', () => {
       expect(result.current.standardRoutes.length).toBeGreaterThanOrEqual(0);
     });
   });
+
+  describe('isFetched property', () => {
+    it('should have isFetched=false initially when queries are disabled', () => {
+      const { result } = renderHook(
+        () => usePrivacyRoutes({
+          fromChainId: null,
+          fromTokenAddress: null,
+          toTokenAddress: '0xusdc',
+          amount: '0',
+          privacyEnabled: true,
+          enabled: false,
+        }),
+        { wrapper }
+      );
+
+      // When queries are disabled, isFetched should be false
+      expect(result.current.isFetched).toBe(false);
+    });
+
+    it('should have isFetched=true after queries complete with results', async () => {
+      const lifiService = await import('../services/lifi');
+      vi.mocked(lifiService.fetchRoutes).mockResolvedValue([{
+        id: 'route-1',
+        fromChain: 1,
+        toChain: 999,
+        fromToken: {
+          address: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
+          symbol: 'USDC',
+          name: 'USD Coin',
+          decimals: 6,
+          chainId: 1,
+        },
+        toToken: {
+          address: '0xusdc',
+          symbol: 'USDC',
+          name: 'USD Coin',
+          decimals: 6,
+          chainId: 999,
+        },
+        fromAmount: '1000000',
+        toAmount: '990000',
+        estimatedTime: 300,
+        gasCost: '2.50',
+        gasCostUSD: '2.50',
+        slippage: 0.5,
+        steps: [],
+      }]);
+
+      const { result } = renderHook(
+        () => usePrivacyRoutes({
+          fromChainId: 1,
+          fromTokenAddress: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
+          toTokenAddress: '0xusdc',
+          amount: '1000000',
+          privacyEnabled: false,
+        }),
+        { wrapper }
+      );
+
+      await waitFor(() => {
+        expect(result.current.isFetched).toBe(true);
+      });
+
+      expect(result.current.standardRoutes.length).toBeGreaterThan(0);
+    });
+
+    it('should have isFetched=true after queries complete with empty results', async () => {
+      const lifiService = await import('../services/lifi');
+      // Return empty array - no routes found
+      vi.mocked(lifiService.fetchRoutes).mockResolvedValue([]);
+
+      const { result } = renderHook(
+        () => usePrivacyRoutes({
+          fromChainId: 1,
+          fromTokenAddress: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
+          toTokenAddress: '0xusdc',
+          amount: '1000000',
+          privacyEnabled: false,
+        }),
+        { wrapper }
+      );
+
+      await waitFor(() => {
+        expect(result.current.isFetched).toBe(true);
+      });
+
+      // Routes should be empty but isFetched should still be true
+      expect(result.current.standardRoutes).toEqual([]);
+      expect(result.current.isFetched).toBe(true);
+    });
+
+    it('should have isFetched=true in privacy mode after both queries complete', async () => {
+      const lifiService = await import('../services/lifi');
+      vi.mocked(lifiService.fetchRoutes).mockResolvedValue([{
+        id: 'route-1',
+        fromChain: 1,
+        toChain: 999,
+        fromToken: {
+          address: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
+          symbol: 'USDC',
+          name: 'USD Coin',
+          decimals: 6,
+          chainId: 1,
+        },
+        toToken: {
+          address: '0xusdc',
+          symbol: 'USDC',
+          name: 'USD Coin',
+          decimals: 6,
+          chainId: 999,
+        },
+        fromAmount: '1000000',
+        toAmount: '990000',
+        estimatedTime: 300,
+        gasCost: '2.50',
+        gasCostUSD: '2.50',
+        slippage: 0.5,
+        steps: [],
+      }]);
+
+      const { result } = renderHook(
+        () => usePrivacyRoutes({
+          fromChainId: 1,
+          fromTokenAddress: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
+          toTokenAddress: '0xusdc',
+          amount: '1000000',
+          privacyEnabled: true,
+        }),
+        { wrapper }
+      );
+
+      await waitFor(() => {
+        expect(result.current.isFetched).toBe(true);
+      });
+    });
+
+    it('should have isFetched=true in privacy mode even when no routes found', async () => {
+      const lifiService = await import('../services/lifi');
+      // Mock returns empty array - simulating no routes available
+      vi.mocked(lifiService.fetchRoutes).mockResolvedValue([]);
+
+      const { result } = renderHook(
+        () => usePrivacyRoutes({
+          fromChainId: 1,
+          fromTokenAddress: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
+          toTokenAddress: '0xusdc',
+          amount: '1000000',
+          privacyEnabled: true,
+        }),
+        { wrapper }
+      );
+
+      await waitFor(() => {
+        expect(result.current.isFetched).toBe(true);
+      });
+
+      // This is the key test case: even with empty routes,
+      // isFetched should be true so the UI shows "No Route Found"
+      // instead of "Select a Route"
+      expect(result.current.standardRoutes).toEqual([]);
+      expect(result.current.privacyRoutes).toEqual([]);
+      expect(result.current.isFetched).toBe(true);
+    });
+
+    it('should track loading state correctly while fetching', async () => {
+      const lifiService = await import('../services/lifi');
+      
+      // Create a promise we can control
+      let resolveRoutes: (value: Quote[]) => void;
+      const routesPromise = new Promise<Quote[]>((resolve) => {
+        resolveRoutes = resolve;
+      });
+      
+      vi.mocked(lifiService.fetchRoutes).mockReturnValue(routesPromise);
+
+      const { result } = renderHook(
+        () => usePrivacyRoutes({
+          fromChainId: 1,
+          fromTokenAddress: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
+          toTokenAddress: '0xusdc',
+          amount: '1000000',
+          privacyEnabled: false,
+        }),
+        { wrapper }
+      );
+
+      // Should be loading initially
+      expect(result.current.isLoading).toBe(true);
+      expect(result.current.isFetched).toBe(false);
+
+      // Resolve the promise
+      await act(async () => {
+        resolveRoutes!([]);
+      });
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+        expect(result.current.isFetched).toBe(true);
+      });
+    });
+  });
 });
 
 describe('usePrivacyExecution', () => {

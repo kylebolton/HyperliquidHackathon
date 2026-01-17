@@ -29,6 +29,7 @@ interface PrivacyRouteResult {
   privacyRoutes: PrivacyRouteQuote[];
   allRoutes: (StandardRouteQuote | PrivacyRouteQuote)[];
   isLoading: boolean;
+  isFetched: boolean;
   error: Error | null;
   refetch: () => void;
 }
@@ -161,6 +162,7 @@ export function usePrivacyRoutes({
     privacyRoutes: privacyRoutesQuery.data || [],
     allRoutes,
     isLoading: standardRoutesQuery.isLoading || (privacyEnabled && privacyRoutesQuery.isLoading),
+    isFetched: standardRoutesQuery.isFetched && (!privacyEnabled || privacyRoutesQuery.isFetched),
     error: standardRoutesQuery.error || privacyRoutesQuery.error || null,
     refetch: () => {
       standardRoutesQuery.refetch();
