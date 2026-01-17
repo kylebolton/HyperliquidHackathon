@@ -305,9 +305,16 @@ export async function fetchRoutes(
     
     // Find the matching destination token
     // For USDC, we want to find LI.FI's USDC token on Hyperliquid
+    // For HYPE, we want to find LI.FI's native token representation
     let resolvedToTokenAddress = toTokenAddress;
     const isLookingForUsdc = toTokenAddress.toLowerCase() === '0xeb62eee3685fc4c43992febcd9e75443aef550ab';
     const isLookingForNative = toTokenAddress.toLowerCase() === '0x0000000000000000000000000000000000000000';
+    
+    console.log('[LI.FI] Token resolution:', { 
+      requestedAddress: toTokenAddress, 
+      isLookingForUsdc, 
+      isLookingForNative 
+    });
     
     if (isLookingForUsdc) {
       // Find USDC on Hyperliquid from LI.FI's token list
@@ -317,13 +324,27 @@ export async function fetchRoutes(
       );
       if (lifiUsdc) {
         resolvedToTokenAddress = lifiUsdc.address;
-        console.log('[LI.FI] Using LI.FI USDC address:', lifiUsdc.address);
+        console.log('[LI.FI] ✓ Resolved USDC to LI.FI address:', lifiUsdc.address);
       } else {
-        console.log('[LI.FI] No USDC found on Hyperliquid, using original address');
+        console.log('[LI.FI] ⚠ No USDC found on Hyperliquid from LI.FI, using original address');
       }
     } else if (isLookingForNative) {
-      // For native token (HYPE), use the native address
-      resolvedToTokenAddress = '0x0000000000000000000000000000000000000000';
+      // For native token (HYPE), first check if LI.FI has a specific token representation
+      const lifiHype = hlTokens.find(t => 
+        t.symbol.toUpperCase() === 'HYPE' || 
+        t.symbol.toUpperCase() === 'WHYPE' ||
+        t.address.toLowerCase() === '0x0000000000000000000000000000000000000000'
+      );
+      if (lifiHype) {
+        resolvedToTokenAddress = lifiHype.address;
+        console.log('[LI.FI] ✓ Resolved HYPE to LI.FI address:', lifiHype.address, 'symbol:', lifiHype.symbol);
+      } else {
+        // Fallback to native zero address
+        resolvedToTokenAddress = '0x0000000000000000000000000000000000000000';
+        console.log('[LI.FI] ✓ Using native zero address for HYPE');
+      }
+    } else {
+      console.log('[LI.FI] Using provided token address as-is:', toTokenAddress);
     }
     
     console.log('[LI.FI] Fetching routes via REST API:', { 

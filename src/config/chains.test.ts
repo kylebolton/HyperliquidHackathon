@@ -4,8 +4,8 @@ import { hyperliquid, hyperliquidTestnet, sourceChains, allChains, chainMetadata
 describe('Chain Configuration', () => {
   describe('Hyperliquid Chain', () => {
     it('should have correct chain ID for mainnet', () => {
-      expect(hyperliquid.id).toBe(998);
-      expect(HYPERLIQUID_CHAIN_ID).toBe(998);
+      expect(hyperliquid.id).toBe(999);
+      expect(HYPERLIQUID_CHAIN_ID).toBe(999);
     });
 
     it('should be named "Hyperliquid" not "HyperEVM"', () => {
@@ -31,8 +31,8 @@ describe('Chain Configuration', () => {
 
   describe('Hyperliquid Testnet Chain', () => {
     it('should have correct chain ID for testnet', () => {
-      expect(hyperliquidTestnet.id).toBe(999);
-      expect(HYPERLIQUID_TESTNET_CHAIN_ID).toBe(999);
+      expect(hyperliquidTestnet.id).toBe(998);
+      expect(HYPERLIQUID_TESTNET_CHAIN_ID).toBe(998);
     });
 
     it('should be named "Hyperliquid Testnet"', () => {
@@ -50,13 +50,13 @@ describe('Chain Configuration', () => {
 
   describe('Chain Metadata', () => {
     it('should have Hyperliquid metadata with correct name', () => {
-      expect(chainMetadata[998]).toBeDefined();
-      expect(chainMetadata[998].name).toBe('Hyperliquid');
-      expect(chainMetadata[998].name).not.toContain('HyperEVM');
+      expect(chainMetadata[999]).toBeDefined();
+      expect(chainMetadata[999].name).toBe('Hyperliquid');
+      expect(chainMetadata[999].name).not.toContain('HyperEVM');
     });
 
-    it('should use Hyperliquid logo for chain 998', () => {
-      expect(chainMetadata[998].logo).toContain('green.png');
+    it('should use Hyperliquid logo for chain 999', () => {
+      expect(chainMetadata[999].logo).toContain('green.png');
     });
 
     it('should have metadata for all source chains', () => {
@@ -81,15 +81,15 @@ describe('Chain Configuration', () => {
 
     it('should not include Hyperliquid in source chains', () => {
       const chainIds = sourceChains.map((c) => c.id);
-      expect(chainIds).not.toContain(998);
+      expect(chainIds).not.toContain(999);
     });
   });
 
   describe('All Chains', () => {
     it('should include Hyperliquid mainnet and testnet', () => {
       const chainIds = allChains.map((c) => c.id);
-      expect(chainIds).toContain(998); // Mainnet
-      expect(chainIds).toContain(999); // Testnet
+      expect(chainIds).toContain(999); // Mainnet
+      expect(chainIds).toContain(998); // Testnet
     });
 
     it('should include all source chains plus Hyperliquid mainnet and testnet', () => {
