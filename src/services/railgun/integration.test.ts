@@ -421,7 +421,7 @@ describe('RAILGUN SDK Integration Tests', () => {
       
       // Note: Full shield execution requires a real provider
       // This test verifies that the operation starts and reports progress
-      const result = await executeShield(
+      await executeShield(
         mockSigner,
         {
           networkName: NetworkName.Arbitrum,
