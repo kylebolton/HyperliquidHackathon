@@ -207,7 +207,7 @@ export const hyperliquidTokens: Token[] = [
     symbol: 'USDC',
     name: 'USD Coin',
     decimals: 6,
-    address: '0xeb62eee3685fc4c43992febcd9e75443aef550ab', // USDC on Hyperliquid
+    address: '0xb88339CB7199b77E23DB6E890353E22632Ba630f', // Native USDC on HyperEVM (Circle)
     chainId: HYPERLIQUID_CHAIN_ID,
     logo: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48/logo.png',
   },

@@ -9,9 +9,22 @@
     @apply border-dark-400/50;
   }
   
+  html {
+    background: #030712;
+  }
+  
   body {
-    @apply bg-dark-950 text-white antialiased;
+    @apply text-white antialiased;
     font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    background: 
+      /* Top green glow */
+      radial-gradient(ellipse 80% 50% at 50% -20%, rgba(74, 222, 128, 0.12) 0%, transparent 50%),
+      /* Center subtle glow */
+      radial-gradient(ellipse 60% 40% at 50% 50%, rgba(34, 197, 94, 0.04) 0%, transparent 60%),
+      /* Bottom dark gradient */
+      linear-gradient(180deg, #030712 0%, #0a0f1a 50%, #030712 100%);
+    background-attachment: fixed;
+    min-height: 100vh;
   }
 
   /* Prevent zoom on mobile inputs */
@@ -115,34 +128,212 @@
   }
 }
 
-/* RainbowKit Modal Centering Overrides */
+/* ═══════════════════════════════════════════════════════════════
+   RainbowKit Modal Styling - Match gradient background seamlessly
+   ═══════════════════════════════════════════════════════════════ */
+
+/* 
+ * CRITICAL FIX: RainbowKit modal backdrop not covering full viewport
+ * 
+ * The issue: RainbowKit renders modals within its provider tree, and CSS
+ * transforms on parent elements create containing blocks that break 
+ * position:fixed. CSS alone cannot fix this reliably.
+ * 
+ * Solution: Use body::before as a full-viewport backdrop when RainbowKit
+ * has an open modal (detected via :has() selector).
+ */
+
+/* Custom full-viewport backdrop when RainbowKit modal is open */
+body:has([data-rk] [role="dialog"])::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(3, 7, 18, 0.92);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  z-index: 99998;
+  /* pointer-events: none allows clicks to pass through to RainbowKit's 
+     actual backdrop element, which handles modal closing */
+  pointer-events: none;
+}
+
+/* Make RainbowKit's backdrop cover full viewport and handle clicks */
+[data-rk] > div[style*="fixed"],
+[data-rk] > div[style*="position"] {
+  position: fixed !important;
+  inset: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  z-index: 99997 !important;
+  /* This element handles click-to-close, so needs pointer-events */
+  pointer-events: auto !important;
+}
+
+/* Hide RainbowKit's visual backdrop since we're providing our own */
+[data-rk] [data-testid*="overlay"],
+[data-rk] > div > div:first-child:not(:has([role="dialog"])) {
+  background: transparent !important;
+  backdrop-filter: none !important;
+}
+
+/* Modal container centering - ensure it's above our custom backdrop */
 [data-rk] [role="dialog"] {
   position: fixed !important;
   left: 50% !important;
   top: 50% !important;
   transform: translate(-50%, -50%) !important;
   max-width: calc(100vw - 32px) !important;
-  max-height: 80vh !important;
+  max-height: 85vh !important;
+  z-index: 99999 !important;
 }
 
-/* RainbowKit modal container fix */
-[data-rk] > div[style*="position: fixed"] {
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
+/* Main modal box - gradient background matching app */
+[data-rk] [role="dialog"] > div,
+[data-rk] [role="dialog"] > section,
+[data-rk] [data-testid="rk-chain-modal"] > div,
+[data-rk] [data-testid="rk-account-modal"] > div {
+  background: 
+    radial-gradient(ellipse 120% 80% at 50% -20%, rgba(74, 222, 128, 0.1) 0%, transparent 50%),
+    linear-gradient(180deg, #0d1420 0%, #0a0f18 40%, #080c14 100%) !important;
+  border: 1px solid rgba(74, 222, 128, 0.12) !important;
+  border-radius: 20px !important;
+  box-shadow: 
+    0 0 0 1px rgba(255, 255, 255, 0.03),
+    0 20px 50px -10px rgba(0, 0, 0, 0.6),
+    0 0 100px -30px rgba(74, 222, 128, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.03) !important;
+  overflow: hidden !important;
 }
 
-/* RainbowKit chain modal specific fix */
+/* Force all nested containers to be transparent */
+[data-rk] [role="dialog"] > div > div,
+[data-rk] [role="dialog"] > section > div,
+[data-rk] [role="dialog"] [class*="Modal"],
+[data-rk] [role="dialog"] [class*="Content"],
+[data-rk] [role="dialog"] [class*="Body"],
+[data-rk] [role="dialog"] [class*="List"],
+[data-rk] [role="dialog"] div[style*="background"] {
+  background: transparent !important;
+  background-color: transparent !important;
+}
+
+/* Network/Chain option rows */
+[data-rk] [role="dialog"] button:not([aria-label="Close"]),
+[data-rk] [role="dialog"] [role="menuitem"],
+[data-rk] [role="dialog"] [role="option"] {
+  background: rgba(255, 255, 255, 0.02) !important;
+  border: 1px solid rgba(255, 255, 255, 0.04) !important;
+  border-radius: 12px !important;
+  margin: 4px 0 !important;
+  transition: all 0.15s ease !important;
+}
+
+/* Hover state for options */
+[data-rk] [role="dialog"] button:not([aria-label="Close"]):hover,
+[data-rk] [role="dialog"] [role="menuitem"]:hover,
+[data-rk] [role="dialog"] [role="option"]:hover {
+  background: rgba(74, 222, 128, 0.08) !important;
+  border-color: rgba(74, 222, 128, 0.18) !important;
+}
+
+/* Connected/Selected state - green highlight */
+[data-rk] [role="dialog"] button[data-selected="true"],
+[data-rk] [role="dialog"] [aria-selected="true"],
+[data-rk] [role="dialog"] [class*="selected"],
+[data-rk] [role="dialog"] [class*="Connected"],
+[data-rk] [role="dialog"] div[style*="rgb(74, 222, 128)"] {
+  background: rgba(74, 222, 128, 0.12) !important;
+  border-color: rgba(74, 222, 128, 0.3) !important;
+}
+
+/* Modal header/title styling */
+[data-rk] [role="dialog"] h1,
+[data-rk] [role="dialog"] h2,
+[data-rk] [role="dialog"] [class*="Title"] {
+  color: white !important;
+  font-weight: 600 !important;
+  letter-spacing: -0.01em !important;
+}
+
+/* Close button */
+[data-rk] [role="dialog"] button[aria-label="Close"] {
+  background: rgba(255, 255, 255, 0.05) !important;
+  border: 1px solid rgba(255, 255, 255, 0.06) !important;
+  border-radius: 10px !important;
+}
+
+[data-rk] [role="dialog"] button[aria-label="Close"]:hover {
+  background: rgba(255, 255, 255, 0.1) !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+}
+
+/* Modal scrollable content */
+[data-rk] div[role="dialog"] > div {
+  max-height: 85vh !important;
+  overflow-y: auto !important;
+}
+
+/* Custom scrollbar for modals */
+[data-rk] [role="dialog"] ::-webkit-scrollbar {
+  width: 4px;
+}
+
+[data-rk] [role="dialog"] ::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+[data-rk] [role="dialog"] ::-webkit-scrollbar-thumb {
+  background: rgba(74, 222, 128, 0.2);
+  border-radius: 4px;
+}
+
+[data-rk] [role="dialog"] ::-webkit-scrollbar-thumb:hover {
+  background: rgba(74, 222, 128, 0.35);
+}
+
+/* Chain list scroll container */
+[data-rk] [role="dialog"] [class*="ChainList"],
+[data-rk] [role="dialog"] ul,
+[data-rk] [role="dialog"] [role="listbox"],
+[data-rk] [role="dialog"] [role="menu"] {
+  background: transparent !important;
+}
+
+/* Ensure text is visible */
+[data-rk] [role="dialog"] span,
+[data-rk] [role="dialog"] p,
+[data-rk] [role="dialog"] div {
+  color: inherit;
+}
+
+/* RainbowKit specific modal fixes */
 [data-rk] [aria-label="Chain options"],
-[data-rk] [aria-label="Network selector"] {
+[data-rk] [aria-label="Network selector"],
+[data-rk] [aria-label="Account"] {
   position: fixed !important;
   left: 50% !important;
   top: 50% !important;
   transform: translate(-50%, -50%) !important;
+  z-index: 100001 !important;
 }
 
-/* Ensure RainbowKit modals don't go off screen */
-[data-rk] div[role="dialog"] > div {
-  max-height: 80vh !important;
-  overflow-y: auto !important;
+/* Container fix for proper centering */
+[data-rk] > div[style*="position: fixed"],
+[data-rk] > div[style*="position:fixed"] {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  position: fixed !important;
+  inset: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  z-index: 99999 !important;
+}
+
+/* Ensure all RainbowKit modals appear above everything */
+[data-rk] div[role="dialog"],
+[data-rk] section[role="dialog"] {
+  z-index: 100001 !important;
 }

@@ -1,7 +1,14 @@
 /**
  * DepositToHyperliquid Component
  * 
- * A reusable component for depositing USDC from Hyperliquid EVM to Hyperliquid L1 trading account.
+ * A reusable component for depositing USDC from HyperEVM to Hyperliquid L1 trading account.
+ * 
+ * IMPORTANT DISTINCTION:
+ * - HyperEVM (Chain 999): The EVM-compatible layer where tokens arrive from bridges
+ * - Hyperliquid L1: The actual perps/spot trading platform (NOT directly EVM accessible)
+ * 
+ * This component handles the SECOND step: HyperEVM -> L1 Trading
+ * The first step (External Chain -> HyperEVM) is handled by BridgeWidget via LI.FI
  * 
  * @example
  * ```tsx
@@ -145,21 +152,19 @@ export function DepositToHyperliquid({
         </AnimatePresence>
       </div>
 
-      {/* Flow */}
+      {/* Flow Visualization - Shows wallet to trading transition */}
       <div className="flex items-center justify-center gap-3 p-3 bg-dark-700/50 rounded-xl">
         <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-lg bg-accent/10 flex items-center justify-center">
-            <span className="text-[10px] font-bold text-accent">EVM</span>
+          <div className="w-8 h-8 rounded-lg bg-dark-600 flex items-center justify-center">
+            <Wallet className="w-4 h-4 text-white/50" />
           </div>
-          <span className="text-sm text-white/70">Hyperliquid</span>
+          <span className="text-sm text-white/70">Wallet</span>
         </div>
 
         <ArrowRight className={cn('w-4 h-4', status === 'depositing' ? 'text-accent animate-pulse' : 'text-white/20')} />
 
         <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-lg bg-accent/10 flex items-center justify-center">
-            <span className="text-[10px] font-bold text-accent">L1</span>
-          </div>
+          <img src="/assets/green.png" alt="Hyperliquid" className="w-8 h-8" />
           <span className="text-sm text-white/70">Trading</span>
         </div>
       </div>

@@ -24,6 +24,7 @@ const statusConfig: Record<ExecutionStatus['status'], {
   color: string;
   bgColor: string;
   message: string;
+  subMessage?: string;
   animate?: boolean;
 }> = {
   idle: {
@@ -44,12 +45,14 @@ const statusConfig: Record<ExecutionStatus['status'], {
     color: 'text-warning',
     bgColor: 'bg-warning/10',
     message: 'Confirm in your wallet',
+    subMessage: 'Review and approve the transaction',
   },
   processing: {
     icon: Loader2,
     color: 'text-accent',
     bgColor: 'bg-accent/10',
-    message: 'Processing on-chain...',
+    message: 'Bridging to Hyperliquid...',
+    subMessage: 'Your tokens are being transferred',
     animate: true,
   },
   completed: {
@@ -57,12 +60,14 @@ const statusConfig: Record<ExecutionStatus['status'], {
     color: 'text-accent',
     bgColor: 'bg-accent/10',
     message: 'Bridge complete!',
+    subMessage: 'Your tokens have arrived',
   },
   failed: {
     icon: XCircle,
     color: 'text-error',
     bgColor: 'bg-error/10',
     message: 'Transaction failed',
+    subMessage: 'Please try again',
   },
 };
 
@@ -184,6 +189,7 @@ function StepIndicator({
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center gap-1 text-accent hover:text-accent/80 transition-colors"
+              title="View on HyperEVM Explorer"
             >
               <span className="font-mono">{stepStatus.txHash.slice(0, 6)}...{stepStatus.txHash.slice(-4)}</span>
               <ExternalLink className="w-3 h-3" />
@@ -224,7 +230,10 @@ export function ExecutionProgress({ status, steps, stepStatuses, onClose, onRetr
             </div>
             <div className="flex-1">
               <p className={cn('font-semibold text-lg', config.color)}>{config.message}</p>
-              {status.totalSteps > 0 && (
+              {config.subMessage && (
+                <p className="text-sm text-white/50">{config.subMessage}</p>
+              )}
+              {status.totalSteps > 0 && !config.subMessage && (
                 <p className="text-sm text-white/40">
                   Step {Math.min(status.currentStep + 1, status.totalSteps)} of {status.totalSteps}
                 </p>
