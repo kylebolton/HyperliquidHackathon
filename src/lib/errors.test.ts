@@ -3,8 +3,6 @@ import {
   parseErrorMessage, 
   getErrorByCode, 
   formatError,
-  type ErrorCode,
-  type ParsedError,
 } from './errors';
 
 describe('Error Handling', () => {

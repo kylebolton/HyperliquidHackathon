@@ -392,9 +392,8 @@ describe('usePrivacyExecution', () => {
       privacySteps: [],
     };
 
-    let executePromise: Promise<boolean>;
     act(() => {
-      executePromise = result.current.executePrivacyRoute(mockRoute);
+      result.current.executePrivacyRoute(mockRoute);
     });
 
     // Should be executing
