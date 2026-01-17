@@ -354,12 +354,17 @@ export function BridgeWidget() {
       };
     }
     
-    // Show engine error
-    if (engineError) {
+    // Show engine error - but only if user is trying to use privacy
+    if (engineError && !privacyEnabled) {
+      // Don't show error for standard mode - privacy is optional
+      return null;
+    }
+    
+    if (engineError && privacyEnabled) {
       return {
-        type: 'error',
-        title: 'Privacy Engine Error',
-        message: engineError,
+        type: 'warning',
+        title: 'Privacy Mode Unavailable',
+        message: 'The privacy engine could not be initialized. Standard bridging is still available.',
       };
     }
     
@@ -445,6 +450,14 @@ export function BridgeWidget() {
                   enabled={privacyEnabled}
                   onToggle={handlePrivacyToggle}
                   disabled={isExecuting || isWalletLoading || !isEngineReady}
+                  disabledReason={
+                    isExecuting ? 'Cannot change during transaction' :
+                    isWalletLoading ? 'Wallet is loading...' :
+                    !isEngineReady && isEngineInitializing ? 'Privacy engine is initializing...' :
+                    !isEngineReady && engineError ? 'Privacy engine unavailable' :
+                    !isEngineReady ? 'Privacy engine not ready' :
+                    undefined
+                  }
                 />
                 <SlippageSettings slippage={slippage} onSlippageChange={setSlippage} />
               </div>

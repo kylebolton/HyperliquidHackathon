@@ -29,6 +29,7 @@ import {
   getNetworkName,
   isRailgunSupported,
 } from './types';
+import leveljs from 'level-js';
 
 // Engine singleton state
 let engineState: EngineState = {
@@ -174,31 +175,111 @@ const RPC_PROVIDERS: Record<RailgunChainId, FallbackProviderJsonConfig> = {
 };
 
 /**
+ * IndexedDB database name for artifact caching
+ */
+const ARTIFACT_DB_NAME = 'railgun-artifacts';
+const ARTIFACT_STORE_NAME = 'artifacts';
+
+/**
+ * Open IndexedDB for artifact storage
+ */
+function openArtifactDB(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(ARTIFACT_DB_NAME, 1);
+    
+    request.onerror = () => {
+      console.error('[RAILGUN] Failed to open artifact database:', request.error);
+      reject(request.error);
+    };
+    
+    request.onsuccess = () => {
+      resolve(request.result);
+    };
+    
+    request.onupgradeneeded = (event) => {
+      const db = (event.target as IDBOpenDBRequest).result;
+      if (!db.objectStoreNames.contains(ARTIFACT_STORE_NAME)) {
+        db.createObjectStore(ARTIFACT_STORE_NAME);
+      }
+    };
+  });
+}
+
+/**
  * Artifact store configuration for browser environment
- * Uses a CDN-based approach for downloading ZK circuit artifacts
+ * Uses IndexedDB for caching ZK circuit artifacts
  */
 const artifactStore = {
-  get: async (_path: string): Promise<string | Buffer | null> => {
-    // In browser, return null to trigger download from CDN
-    return null;
+  get: async (path: string): Promise<string | Buffer | null> => {
+    try {
+      const db = await openArtifactDB();
+      return new Promise((resolve) => {
+        const transaction = db.transaction(ARTIFACT_STORE_NAME, 'readonly');
+        const store = transaction.objectStore(ARTIFACT_STORE_NAME);
+        const request = store.get(path);
+        
+        request.onerror = () => {
+          console.warn('[RAILGUN] Failed to get artifact:', path);
+          resolve(null);
+        };
+        
+        request.onsuccess = () => {
+          resolve(request.result || null);
+        };
+        
+        transaction.oncomplete = () => {
+          db.close();
+        };
+      });
+    } catch (error) {
+      console.warn('[RAILGUN] Artifact store get error:', error);
+      return null;
+    }
   },
-  store: async (_dir: string, _path: string, _item: string | Uint8Array): Promise<void> => {
-    // Browser storage is handled internally by the SDK using IndexedDB
+  
+  store: async (_dir: string, path: string, item: string | Uint8Array): Promise<void> => {
+    try {
+      const db = await openArtifactDB();
+      return new Promise((resolve, reject) => {
+        const transaction = db.transaction(ARTIFACT_STORE_NAME, 'readwrite');
+        const store = transaction.objectStore(ARTIFACT_STORE_NAME);
+        const request = store.put(item, path);
+        
+        request.onerror = () => {
+          console.warn('[RAILGUN] Failed to store artifact:', path);
+          reject(request.error);
+        };
+        
+        request.onsuccess = () => {
+          resolve();
+        };
+        
+        transaction.oncomplete = () => {
+          db.close();
+        };
+      });
+    } catch (error) {
+      console.warn('[RAILGUN] Artifact store put error:', error);
+    }
   },
-  exists: async (_path: string): Promise<boolean> => {
-    // Let the SDK handle artifact caching
-    return false;
+  
+  exists: async (path: string): Promise<boolean> => {
+    try {
+      const result = await artifactStore.get(path);
+      return result !== null;
+    } catch {
+      return false;
+    }
   },
 };
 
 /**
  * Create the database storage for browser environment
- * Uses IndexedDB via localForage internally
+ * Uses level-js which is abstract-leveldown compatible and backed by IndexedDB
  */
-function createBrowserDatabase(_dbPath: string) {
-  // The SDK handles browser database creation internally
-  // This is a no-op for browser environments
-  return undefined;
+function createBrowserDatabase(dbPath: string): ReturnType<typeof leveljs> {
+  // Create a level-js database (abstract-leveldown compatible, backed by IndexedDB)
+  return leveljs(dbPath);
 }
 
 /**
@@ -226,16 +307,39 @@ async function doInitializeEngine(
   config?: Partial<RailgunEngineConfig>
 ): Promise<boolean> {
   try {
+    console.log('[RAILGUN] Starting engine initialization...');
+    
     updateEngineState({ 
       status: 'initializing',
       error: undefined,
     });
 
-    const walletSource = config?.walletSource ?? 'liquyn-swap';
+    const walletSource = config?.walletSource ?? 'liquynswap';
     const poiNodeURLs = config?.poiConfig?.nodeURLs ?? DEFAULT_POI_NODES;
-    const shouldDebug = config?.shouldDebug ?? false;
+    const shouldDebug = config?.shouldDebug ?? true; // Enable debug by default for troubleshooting
+    
+    console.log('[RAILGUN] Config:', { walletSource, poiNodeURLs, shouldDebug });
 
-    // Set up balance update callback
+    updateEngineState({ status: 'downloading_artifacts' });
+    console.log('[RAILGUN] Calling startRailgunEngine...');
+
+    const dbPath = createBrowserDatabase('railgun-db');
+    console.log('[RAILGUN] Database path:', dbPath);
+
+    // Initialize the engine FIRST - callbacks must be set AFTER engine is started
+    await startRailgunEngine(
+      walletSource,
+      dbPath,
+      shouldDebug,
+      artifactStore,
+      false, // useNativeArtifacts - false for browser
+      false, // skipMerkletreeScans - we want full scanning
+      poiNodeURLs,
+    );
+
+    console.log('[RAILGUN] Engine started, setting up callbacks...');
+
+    // Set up balance update callback AFTER engine is started
     setOnBalanceUpdateCallback(async (balanceData) => {
       // Balance updated - this will be handled by the wallet module
       if (shouldDebug && isDefined(balanceData)) {
@@ -243,7 +347,7 @@ async function doInitializeEngine(
       }
     });
 
-    // Set up merkletree scan callbacks
+    // Set up merkletree scan callbacks AFTER engine is started
     setOnUTXOMerkletreeScanCallback((scanData) => {
       if (shouldDebug && isDefined(scanData)) {
         const progress = scanData.progress ?? 0;
@@ -258,18 +362,7 @@ async function doInitializeEngine(
       }
     });
 
-    updateEngineState({ status: 'downloading_artifacts' });
-
-    // Initialize the engine
-    await startRailgunEngine(
-      walletSource,
-      createBrowserDatabase('railgun-db'),
-      shouldDebug,
-      artifactStore,
-      false, // useNativeArtifacts - false for browser
-      false, // skipMerkletreeScans - we want full scanning
-      poiNodeURLs,
-    );
+    console.log('[RAILGUN] Callbacks set, loading providers...');
 
     // Load providers for all supported networks
     await loadProvidersForNetworks();
@@ -279,8 +372,24 @@ async function doInitializeEngine(
     
     return true;
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    console.error('[RAILGUN] Engine initialization failed:', errorMessage);
+    // Log the full error for debugging
+    console.error('[RAILGUN] Engine initialization failed:', error);
+    
+    // Extract error message
+    let errorMessage = 'Unknown error during engine initialization';
+    if (error instanceof Error) {
+      errorMessage = error.message;
+      // Log stack trace for debugging
+      if (error.stack) {
+        console.error('[RAILGUN] Stack trace:', error.stack);
+      }
+    } else if (typeof error === 'string') {
+      errorMessage = error;
+    } else if (error && typeof error === 'object') {
+      errorMessage = JSON.stringify(error);
+    }
+    
+    console.error('[RAILGUN] Error message:', errorMessage);
     
     updateEngineState({
       status: 'error',
