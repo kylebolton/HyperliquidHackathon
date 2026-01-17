@@ -175,7 +175,7 @@ export async function executeShield(
   // Ensure provider is loaded for the target network
   const chainId = getChainId(params.networkName);
   if (chainId) {
-    const providerLoaded = await loadNetworkProvider(chainId);
+    const providerLoaded = await loadNetworkProvider(chainId as RailgunChainId);
     if (!providerLoaded) {
       console.warn(`[RAILGUN] Could not load provider for ${params.networkName}, continuing anyway`);
     }
@@ -353,7 +353,7 @@ export async function executeUnshield(
   // Ensure provider is loaded for the target network
   const chainId = getChainId(params.networkName);
   if (chainId) {
-    const providerLoaded = await loadNetworkProvider(chainId);
+    const providerLoaded = await loadNetworkProvider(chainId as RailgunChainId);
     if (!providerLoaded) {
       console.warn(`[RAILGUN] Could not load provider for ${params.networkName}, continuing anyway`);
     }
