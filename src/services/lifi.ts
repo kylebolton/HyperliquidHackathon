@@ -14,6 +14,13 @@ let cachedHyperliquidChainId: number | null = null;
 let cachedLiFiChains: ExtendedChain[] | null = null;
 let cachedHyperliquidTokens: LiFiToken[] | null = null;
 
+// Reset cache (for testing)
+export function resetLiFiCache(): void {
+  cachedHyperliquidChainId = null;
+  cachedLiFiChains = null;
+  cachedHyperliquidTokens = null;
+}
+
 export async function discoverHyperliquidChainId(): Promise<number> {
   if (cachedHyperliquidChainId !== null) {
     return cachedHyperliquidChainId;
@@ -23,30 +30,41 @@ export async function discoverHyperliquidChainId(): Promise<number> {
     const chains = await getChains();
     cachedLiFiChains = chains;
     
-    // Search for Hyperliquid with various possible identifiers
-    const hyperliquid = chains.find(c => 
+    // IMPORTANT: Always use chain ID 999 for HyperEVM mainnet
+    // The LI.FI SDK incorrectly returns 1337 for "Hyperliquid" name, but 999 is the correct mainnet ID
+    // Priority: 1) Chain ID 999, 2) Chain ID from our config, 3) Name-based search
+    
+    // First, explicitly look for chain ID 999 (HyperEVM mainnet)
+    const byCorrectId = chains.find(c => c.id === 999);
+    if (byCorrectId) {
+      cachedHyperliquidChainId = 999;
+      return 999;
+    }
+    
+    // Fallback to our configured chain ID
+    const byConfigId = chains.find(c => c.id === HYPERLIQUID_CHAIN_ID);
+    if (byConfigId) {
+      cachedHyperliquidChainId = HYPERLIQUID_CHAIN_ID;
+      return HYPERLIQUID_CHAIN_ID;
+    }
+    
+    // Last resort: name-based search (but verify the ID is correct)
+    const byName = chains.find(c => 
       c.name.toLowerCase() === 'hyperliquid' ||
       c.name.toLowerCase().includes('hyperliquid') || 
       c.name.toLowerCase().includes('hyperevm') ||
       c.key?.toLowerCase() === 'hyperliquid' ||
       c.key?.toLowerCase() === 'hyp' ||
-      c.key?.toLowerCase() === 'hpl' ||
-      c.id === HYPERLIQUID_CHAIN_ID ||
-      c.id === 999
+      c.key?.toLowerCase() === 'hpl'
     );
     
-    if (hyperliquid) {
-      cachedHyperliquidChainId = hyperliquid.id;
-      return hyperliquid.id;
+    // If found by name, use it only if the ID matches expected values
+    if (byName && (byName.id === 999 || byName.id === HYPERLIQUID_CHAIN_ID)) {
+      cachedHyperliquidChainId = byName.id;
+      return byName.id;
     }
     
-    // If not found by name, try searching by chain ID 999 (mainnet)
-    const byId = chains.find(c => c.id === 999);
-    if (byId) {
-      cachedHyperliquidChainId = byId.id;
-      return byId.id;
-    }
-    
+    // Default to our known correct chain ID
     cachedHyperliquidChainId = HYPERLIQUID_CHAIN_ID;
     return HYPERLIQUID_CHAIN_ID;
   } catch {
