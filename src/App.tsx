@@ -271,6 +271,7 @@ function AppContent() {
                     { name: 'BASE', logo: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/base/info/logo.png', color: '#0052FF' },
                     { name: 'BNB', logo: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/binance/info/logo.png', color: '#F0B90B' },
                     { name: 'AVAX', logo: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/avalanchec/info/logo.png', color: '#E84142' },
+                    { name: 'SONIC', logo: 'https://s2.coinmarketcap.com/static/img/coins/64x64/32684.png', color: '#1DB4F4' },
                   ].map((chain) => (
                     <motion.div
                       key={chain.name}

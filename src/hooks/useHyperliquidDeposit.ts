@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { useAccount, useWalletClient, usePublicClient } from 'wagmi';
 import { depositToHyperliquid, checkUSDCBalance } from '../services/hyperliquid';
+import { HYPERLIQUID_CHAIN_ID } from '../config/chains';
 import type { PublicClient, WalletClient } from 'viem';
 
 export type DepositStatus = 'idle' | 'checking' | 'approving' | 'depositing' | 'completed' | 'failed';
@@ -18,7 +19,9 @@ interface UseHyperliquidDepositResult {
 export function useHyperliquidDeposit(): UseHyperliquidDepositResult {
   const { address } = useAccount();
   const { data: walletClient } = useWalletClient();
-  const publicClient = usePublicClient();
+  // Use Hyperliquid-specific public client for balance checks and contract reads
+  // This ensures we query the correct chain regardless of which chain the wallet is connected to
+  const hyperliquidPublicClient = usePublicClient({ chainId: HYPERLIQUID_CHAIN_ID });
 
   const [status, setStatus] = useState<DepositStatus>('idle');
   const [statusMessage, setStatusMessage] = useState('');
@@ -26,7 +29,7 @@ export function useHyperliquidDeposit(): UseHyperliquidDepositResult {
   const [error, setError] = useState<string | null>(null);
 
   const deposit = useCallback(async (amountUSD: string): Promise<boolean> => {
-    if (!walletClient || !publicClient || !address) {
+    if (!walletClient || !hyperliquidPublicClient || !address) {
       setError('Wallet not connected');
       setStatus('failed');
       return false;
@@ -40,7 +43,7 @@ export function useHyperliquidDeposit(): UseHyperliquidDepositResult {
     try {
       const result = await depositToHyperliquid(
         walletClient as WalletClient,
-        publicClient as PublicClient,
+        hyperliquidPublicClient as PublicClient,
         amountUSD,
         (newStatus, message) => {
           setStatus(newStatus);
@@ -66,7 +69,7 @@ export function useHyperliquidDeposit(): UseHyperliquidDepositResult {
       setStatusMessage(errorMessage);
       return false;
     }
-  }, [walletClient, publicClient, address]);
+  }, [walletClient, hyperliquidPublicClient, address]);
 
   const reset = useCallback(() => {
     setStatus('idle');
@@ -89,23 +92,24 @@ export function useHyperliquidDeposit(): UseHyperliquidDepositResult {
 // Hook to check USDC balance on Hyperliquid
 export function useHyperliquidBalance() {
   const { address } = useAccount();
-  const publicClient = usePublicClient();
+  // Use Hyperliquid-specific public client to query balance on the correct chain
+  const hyperliquidPublicClient = usePublicClient({ chainId: HYPERLIQUID_CHAIN_ID });
   const [balance, setBalance] = useState<string>('0');
   const [isLoading, setIsLoading] = useState(false);
 
   const fetchBalance = useCallback(async () => {
-    if (!publicClient || !address) return;
+    if (!hyperliquidPublicClient || !address) return;
     
     setIsLoading(true);
     try {
-      const balanceRaw = await checkUSDCBalance(publicClient as PublicClient, address);
+      const balanceRaw = await checkUSDCBalance(hyperliquidPublicClient as PublicClient, address);
       setBalance((Number(balanceRaw) / 1e6).toString());
     } catch (error) {
       console.error('Error fetching balance:', error);
     } finally {
       setIsLoading(false);
     }
-  }, [publicClient, address]);
+  }, [hyperliquidPublicClient, address]);
 
   return { balance, isLoading, fetchBalance };
 }
