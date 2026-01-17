@@ -328,15 +328,14 @@ async function doInitializeEngine(
     console.log('[RAILGUN] Database path:', dbPath);
 
     // Initialize the engine FIRST - callbacks must be set AFTER engine is started
-    // Skip merkletree scans on init to avoid rate limiting from public RPCs
-    // Scans will happen lazily when wallet is loaded and balances are needed
+    // Note: skipMerkletreeScans must be false for wallet creation to work
     await startRailgunEngine(
       walletSource,
       dbPath,
       shouldDebug,
       artifactStore,
       false, // useNativeArtifacts - false for browser
-      true,  // skipMerkletreeScans - skip to avoid rate limits, scan lazily when needed
+      false, // skipMerkletreeScans - required for wallet operations
       poiNodeURLs,
     );
 
