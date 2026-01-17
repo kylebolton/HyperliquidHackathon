@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAccount, useBalance, useSwitchChain } from 'wagmi';
 import { parseUnits } from 'viem';
@@ -40,6 +40,9 @@ type StatusMessage = {
 export function BridgeWidget() {
   const { address, isConnected, chainId: connectedChainId } = useAccount();
   const { switchChain } = useSwitchChain();
+  
+  // Ref for scrolling to execution progress
+  const executionProgressRef = useRef<HTMLDivElement>(null);
   
   // Bridge state
   const [fromChainId, setFromChainId] = useState<number | null>(null);
@@ -199,6 +202,18 @@ export function BridgeWidget() {
     setSelectedRoute(null);
   }, [fromChainId, fromChainKey]);
 
+  // Scroll to execution progress when transaction starts
+  useEffect(() => {
+    if (isExecuting && executionProgressRef.current) {
+      setTimeout(() => {
+        executionProgressRef.current?.scrollIntoView({ 
+          behavior: 'smooth', 
+          block: 'center' 
+        });
+      }, 100); // Small delay to let the component render
+    }
+  }, [isExecuting]);
+
   // Determine button state with detailed feedback
   const buttonState: ButtonState = useMemo(() => {
     if (!isConnected) {
@@ -346,43 +361,45 @@ export function BridgeWidget() {
   }, [isConnected, hasSufficientBalance, amount, balance, fromToken, routeError, isRoutesFetched, routes, isLoadingRoutes, isWrongNetwork, fromChainId, lastError, executionStatus.status, canRetry, isPolling, txStatus]);
 
   return (
-    <div className="w-full max-w-md mx-auto space-y-4 px-4 sm:px-0">
+    <div className="w-full max-w-md mx-auto space-y-6 px-4 sm:px-0">
       {/* Main Bridge Card */}
       <motion.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         className="bg-dark-800/80 border border-dark-400/30 rounded-2xl p-5 sm:p-6"
       >
-        <div className="space-y-5">
+        <div className="space-y-6">
           {/* Header with Privacy Toggle and Slippage Settings */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-medium text-white/50">From</span>
-              {privacyEnabled && (
-                <span className="flex items-center gap-1 px-2 py-0.5 bg-purple-500/20 border border-purple-500/30 rounded-full">
-                  <Shield className="w-3 h-3 text-purple-400" />
-                  <span className="text-xs font-medium text-purple-400">Private</span>
-                </span>
-              )}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium text-white/50">From</span>
+                {privacyEnabled && (
+                  <span className="flex items-center gap-1 px-2 py-0.5 bg-purple-500/20 border border-purple-500/30 rounded-full">
+                    <Shield className="w-3 h-3 text-purple-400" />
+                    <span className="text-xs font-medium text-purple-400">Private</span>
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-3">
+                <PrivacyToggle
+                  enabled={privacyEnabled}
+                  onToggle={setPrivacyEnabled}
+                  disabled={isExecuting}
+                />
+                <SlippageSettings slippage={slippage} onSlippageChange={setSlippage} />
+              </div>
             </div>
-            <div className="flex items-center gap-2">
-              {balance && fromToken && (
-                <span className={cn(
-                  'text-xs',
-                  !hasSufficientBalance && amount && parseFloat(amount) > 0 
-                    ? 'text-red-400' 
-                    : 'text-white/30'
-                )}>
-                  Balance: {formatAmount(balance.formatted)} {fromToken.symbol}
-                </span>
-              )}
-              <PrivacyToggle
-                enabled={privacyEnabled}
-                onToggle={setPrivacyEnabled}
-                disabled={isExecuting}
-              />
-              <SlippageSettings slippage={slippage} onSlippageChange={setSlippage} />
-            </div>
+            {balance && fromToken && (
+              <div className={cn(
+                'text-xs',
+                !hasSufficientBalance && amount && parseFloat(amount) > 0 
+                  ? 'text-red-400' 
+                  : 'text-white/40'
+              )}>
+                Balance: {formatAmount(balance.formatted)} {fromToken.symbol}
+              </div>
+            )}
           </div>
           
           {/* Chain & Token Selection */}
@@ -441,7 +458,7 @@ export function BridgeWidget() {
           </div>
 
           {/* To Section */}
-          <div className="space-y-3">
+          <div className="space-y-4">
             <span className="text-sm font-medium text-white/50">To (Hyperliquid)</span>
             
             {/* Destination Token Selector */}
@@ -614,42 +631,44 @@ export function BridgeWidget() {
       )}
 
       {/* Execution Progress - Standard */}
-      {!privacyEnabled && (
-        <ExecutionProgress
-          status={executionStatus}
-          steps={selectedRoute?.steps}
-          stepStatuses={stepExecutions}
-          onClose={() => {
-            resetExecution();
-            if (executionStatus.status === 'completed') {
-              setAmount('');
-              setSelectedRoute(null);
-              refetchRoutes();
-            }
-          }}
-          onRetry={canRetry ? handleRetry : undefined}
-        />
-      )}
+      <div ref={executionProgressRef}>
+        {!privacyEnabled && (
+          <ExecutionProgress
+            status={executionStatus}
+            steps={selectedRoute?.steps}
+            stepStatuses={stepExecutions}
+            onClose={() => {
+              resetExecution();
+              if (executionStatus.status === 'completed') {
+                setAmount('');
+                setSelectedRoute(null);
+                refetchRoutes();
+              }
+            }}
+            onRetry={canRetry ? handleRetry : undefined}
+          />
+        )}
 
-      {/* Execution Progress - Privacy */}
-      {privacyEnabled && privacyExecutionState.status !== 'idle' && (
-        <PrivacyProgress
-          executionState={privacyExecutionState}
-          onClose={() => {
-            resetPrivacyExecution();
-            if (privacyExecutionState.status === 'completed') {
-              setAmount('');
-              setSelectedRoute(null);
-              refetchRoutes();
-            }
-          }}
-          onRetry={privacyExecutionState.status === 'failed' ? () => {
-            if (selectedRoute && isPrivacyRoute(selectedRoute)) {
-              executePrivacyRoute(selectedRoute as PrivacyRouteQuote);
-            }
-          } : undefined}
-        />
-      )}
+        {/* Execution Progress - Privacy */}
+        {privacyEnabled && privacyExecutionState.status !== 'idle' && (
+          <PrivacyProgress
+            executionState={privacyExecutionState}
+            onClose={() => {
+              resetPrivacyExecution();
+              if (privacyExecutionState.status === 'completed') {
+                setAmount('');
+                setSelectedRoute(null);
+                refetchRoutes();
+              }
+            }}
+            onRetry={privacyExecutionState.status === 'failed' ? () => {
+              if (selectedRoute && isPrivacyRoute(selectedRoute)) {
+                executePrivacyRoute(selectedRoute as PrivacyRouteQuote);
+              }
+            } : undefined}
+          />
+        )}
+      </div>
 
       {/* Network Switch Modal */}
       <NetworkSwitchModal
