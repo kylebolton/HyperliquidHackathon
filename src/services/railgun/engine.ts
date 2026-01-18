@@ -88,7 +88,9 @@ export function isEngineReady(): boolean {
  * These are the official RAILGUN community nodes
  */
 const DEFAULT_POI_NODES = [
-  'https://poi-node.railgun.org',
+  'https://poi-node-1.railgun.ch',
+  'https://poi-node-2.railgun.ch',
+  'https://poi-aggregator.railway.app',
 ];
 
 /**
