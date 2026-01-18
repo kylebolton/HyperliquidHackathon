@@ -1,97 +1,31 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
-import { useAccount, useBalance, useSwitchChain } from 'wagmi';
+import { useState, useEffect, useMemo } from 'react';
+import { motion } from 'motion/react';
+import { useAccount, useBalance } from 'wagmi';
 import { parseUnits } from 'viem';
-import { ArrowDown, AlertCircle, Loader2, Info, RefreshCw, Shield, Lock } from 'lucide-react';
+import { ArrowDown } from 'lucide-react';
 import { cn, formatAmount } from '../../lib/utils';
 import { ChainSelector, TokenSelector } from './ChainTokenSelector';
 import { QuoteCard } from './QuoteCard';
 import { ExecutionProgress } from './ExecutionProgress';
-import { RouteOptions } from './RouteOptions';
-import { SlippageSettings } from './SlippageSettings';
-import { PrivacyToggle } from './PrivacyToggle';
-import { PrivacyProgress } from './PrivacyProgress';
-import { NetworkSwitchModal } from './NetworkSwitchModal';
 import { DepositToHyperliquid } from '../deposit/DepositToHyperliquid';
 import { Button } from '../ui/Button';
-import { useLiFiRoutes } from '../../hooks/useLiFiQuote';
-import { useRetryExecution } from '../../hooks/useRetryExecution';
-import { usePrivacyRoutes, usePrivacyExecution, isPrivacyRoute } from '../../hooks/usePrivacyRoute';
-import { useTransactionStatus, getStatusMessage } from '../../hooks/useTransactionStatus';
-import { useRailgunEngine } from '../../hooks/useRailgunEngine';
-import { useRailgunWallet } from '../../hooks/useRailgunWallet';
-import { hyperliquidTokens, type Token } from '../../config/tokens';
-import { HYPERLIQUID_CHAIN_ID, sourceSelectorChains, chainMetadata } from '../../config/chains';
-import type { Quote, PrivacyRouteQuote } from '../../types';
-
-type ButtonState = {
-  text: string;
-  disabled: boolean;
-  variant: 'primary' | 'error' | 'warning';
-  showLoader?: boolean;
-};
-
-type StatusMessage = {
-  type: 'error' | 'warning' | 'info';
-  message: string;
-  title?: string;
-  action?: string;
-  canRetry?: boolean;
-} | null;
+import { useLiFiQuote } from '../../hooks/useLiFiQuote';
+import { useLiFiExecution } from '../../hooks/useLiFiExecution';
+import { hyperEVMTokens, type Token } from '../../config/tokens';
 
 export function BridgeWidget() {
-  const { address, isConnected, chainId: connectedChainId } = useAccount();
-  const { switchChain } = useSwitchChain();
-  
-  // RAILGUN Engine and Wallet hooks
-  const { 
-    isReady: isEngineReady, 
-    isInitializing: isEngineInitializing,
-    error: engineError,
-  } = useRailgunEngine(true); // Auto-initialize on mount
-  
-  const {
-    isReady: isWalletReady,
-    isLoading: isWalletLoading,
-    isAwaitingSignature,
-    railgunAddress,
-    createWallet,
-    error: walletError,
-  } = useRailgunWallet(false); // Don't auto-create, wait for user to enable privacy
-  
-  // Ref for scrolling to execution progress
-  const executionProgressRef = useRef<HTMLDivElement>(null);
+  const { address, isConnected } = useAccount();
   
   // Bridge state
   const [fromChainId, setFromChainId] = useState<number | null>(null);
-  const [fromChainKey, setFromChainKey] = useState<string | null>(null);
   const [fromToken, setFromToken] = useState<Token | null>(null);
-  const [toToken, setToToken] = useState<Token>(hyperliquidTokens[0]); // Default to USDC
+  const [toToken, setToToken] = useState<Token>(hyperEVMTokens[0]); // Default to USDC
   const [amount, setAmount] = useState('');
-  const [slippage, setSlippage] = useState(1.0); // 1% default slippage
   const [autoDeposit, setAutoDeposit] = useState(false);
   const [showDepositModal, setShowDepositModal] = useState(false);
-  const [showNetworkSwitchModal, setShowNetworkSwitchModal] = useState(false);
-  const [selectedRoute, setSelectedRoute] = useState<Quote | null>(null);
-  const [privacyEnabled, setPrivacyEnabled] = useState(false);
-  const [showPrivacySetup, setShowPrivacySetup] = useState(false);
-
-  // Handle privacy toggle - create wallet if not ready
-  const handlePrivacyToggle = async (enabled: boolean) => {
-    if (enabled && !isWalletReady && isEngineReady) {
-      setShowPrivacySetup(true);
-      const walletId = await createWallet();
-      setShowPrivacySetup(false);
-      if (walletId) {
-        setPrivacyEnabled(true);
-      }
-    } else {
-      setPrivacyEnabled(enabled);
-    }
-  };
 
   // Get balance for selected token
-  const { data: balance, isLoading: isBalanceLoading } = useBalance({
+  const { data: balance } = useBalance({
     address,
     token: fromToken?.address === '0x0000000000000000000000000000000000000000' 
       ? undefined 
@@ -109,226 +43,37 @@ export function BridgeWidget() {
     }
   }, [amount, fromToken]);
 
-  // Check if user has sufficient balance
-  const hasSufficientBalance = useMemo(() => {
-    if (!balance || !amount || parseFloat(amount) <= 0) return true; // Don't show error if no amount
-    return parseFloat(balance.formatted) >= parseFloat(amount);
-  }, [balance, amount]);
-
-  // Get standard routes
+  // Get quote
   const { 
-    data: standardRoutes, 
-    isLoading: isLoadingStandardRoutes, 
-    error: standardRouteError,
-    isFetched: isStandardRoutesFetched,
-    refetch: refetchStandardRoutes,
-  } = useLiFiRoutes({
+    data: quote, 
+    isLoading: isLoadingQuote, 
+    error: quoteError 
+  } = useLiFiQuote({
     fromChainId,
     fromTokenAddress: fromToken?.address || null,
     toTokenAddress: toToken.address,
     amount: amountInUnits,
-    slippage,
-    enabled: !!fromChainId && !!fromToken && !!amount && parseFloat(amount) > 0 && hasSufficientBalance && !privacyEnabled,
+    enabled: !!fromChainId && !!fromToken && !!amount && parseFloat(amount) > 0,
   });
 
-  // Get privacy-enhanced routes when privacy is enabled
-  const {
-    standardRoutes: privacyStandardRoutes,
-    privacyRoutes,
-    isLoading: isLoadingPrivacyRoutes,
-    isFetched: isPrivacyRoutesFetched,
-    error: privacyRouteError,
-    refetch: refetchPrivacyRoutes,
-  } = usePrivacyRoutes({
-    fromChainId,
-    fromTokenAddress: fromToken?.address || null,
-    toTokenAddress: toToken.address,
-    amount: amountInUnits,
-    slippage,
-    privacyEnabled,
-    enabled: !!fromChainId && !!fromToken && !!amount && parseFloat(amount) > 0 && hasSufficientBalance && privacyEnabled,
-  });
-
-  // Combine routes based on privacy mode
-  const routes = useMemo(() => {
-    if (privacyEnabled) {
-      // Show privacy routes first, then standard routes from privacy hook
-      return [...privacyRoutes, ...privacyStandardRoutes];
-    }
-    return standardRoutes || [];
-  }, [privacyEnabled, privacyRoutes, privacyStandardRoutes, standardRoutes]);
-
-  const isLoadingRoutes = privacyEnabled ? isLoadingPrivacyRoutes : isLoadingStandardRoutes;
-  const routeError = privacyEnabled ? privacyRouteError : standardRouteError;
-  const isRoutesFetched = privacyEnabled ? isPrivacyRoutesFetched : isStandardRoutesFetched;
-  
-  const refetchRoutes = () => {
-    if (privacyEnabled) {
-      refetchPrivacyRoutes();
-    } else {
-      refetchStandardRoutes();
-    }
-  };
-
-  // Auto-select best route when routes change
-  useEffect(() => {
-    if (routes && routes.length > 0) {
-      setSelectedRoute(routes[0]);
-    } else {
-      setSelectedRoute(null);
-    }
-  }, [routes]);
-
-  // Execution with retry support (standard routes)
-  const { 
-    status: executionStatus, 
-    stepExecutions,
-    execute, 
-    retry,
-    reset: resetExecution, 
-    isExecuting: isStandardExecuting,
-    lastError,
-    canRetry,
-    retryCount,
-    maxRetries,
-  } = useRetryExecution();
-
-  // Privacy execution
-  const {
-    executionState: privacyExecutionState,
-    executePrivacyRoute,
-    reset: resetPrivacyExecution,
-    isExecuting: isPrivacyExecuting,
-  } = usePrivacyExecution();
-
-  const isExecuting = isStandardExecuting || isPrivacyExecuting;
-
-  // Transaction status polling for cross-chain tracking
-  const { status: txStatus, isPolling } = useTransactionStatus({
-    txHash: executionStatus.txHash,
-    fromChainId: fromChainId || undefined,
-    enabled: !!executionStatus.txHash && executionStatus.status === 'processing',
-    onComplete: () => {
-      // Transaction completed on destination chain
-    },
-    onFailed: () => {
-      // Transaction failed
-    },
-  });
-
-  // Check if on wrong network
-  const isWrongNetwork = fromChainId && connectedChainId !== fromChainId;
-
-  // Get chain name for display
-  const fromChainName = fromChainKey 
-    ? sourceSelectorChains.find(c => c.key === fromChainKey)?.name 
-    : sourceSelectorChains.find(c => c.id === fromChainId)?.name;
-  
-  // Get chain info for modal
-  const fromChainLogo = fromChainId ? chainMetadata[fromChainId]?.logo : undefined;
-  const currentChainName = connectedChainId ? chainMetadata[connectedChainId]?.name : undefined;
+  // Execution
+  const { status: executionStatus, execute, reset: resetExecution, isExecuting } = useLiFiExecution();
 
   // Reset token when chain changes
   useEffect(() => {
     setFromToken(null);
     setAmount('');
-    setSelectedRoute(null);
-  }, [fromChainId, fromChainKey]);
+  }, [fromChainId]);
 
-  // Scroll to execution progress when transaction starts
-  useEffect(() => {
-    if (isExecuting && executionProgressRef.current) {
-      setTimeout(() => {
-        executionProgressRef.current?.scrollIntoView({ 
-          behavior: 'smooth', 
-          block: 'center' 
-        });
-      }, 100); // Small delay to let the component render
-    }
-  }, [isExecuting]);
-
-  // Determine button state with detailed feedback
-  const buttonState: ButtonState = useMemo(() => {
-    if (!isConnected) {
-      return { text: 'Connect Wallet', disabled: true, variant: 'primary' };
-    }
-    if (!fromChainId) {
-      return { text: 'Select Source Chain', disabled: true, variant: 'primary' };
-    }
-    if (!fromToken) {
-      return { text: 'Select Token', disabled: true, variant: 'primary' };
-    }
-    if (!amount || parseFloat(amount) <= 0) {
-      return { text: 'Enter Amount', disabled: true, variant: 'primary' };
-    }
-    if (isBalanceLoading) {
-      return { text: 'Checking Balance...', disabled: true, variant: 'primary', showLoader: true };
-    }
-    if (!hasSufficientBalance) {
-      return { text: 'Insufficient Balance', disabled: true, variant: 'error' };
-    }
-    if (isWrongNetwork) {
-      return { text: `Switch to ${fromChainName || 'Source Chain'}`, disabled: false, variant: 'primary' };
-    }
-    if (isLoadingRoutes) {
-      return { text: 'Finding Best Routes...', disabled: true, variant: 'primary', showLoader: true };
-    }
-    if (routeError) {
-      return { text: 'No Route Available', disabled: true, variant: 'error' };
-    }
-    if (isRoutesFetched && (!routes || routes.length === 0)) {
-      return { text: 'No Route Found', disabled: true, variant: 'error' };
-    }
-    if (isExecuting) {
-      const text = privacyEnabled && isPrivacyExecuting ? 'Privacy Bridging...' : 'Bridging...';
-      return { text, disabled: true, variant: 'primary', showLoader: true };
-    }
-    if (selectedRoute) {
-      const isPrivate = isPrivacyRoute(selectedRoute);
-      const text = isPrivate ? 'Private Bridge to Hyperliquid' : 'Bridge to Hyperliquid';
-      return { text, disabled: false, variant: 'primary' };
-    }
-    return { text: 'Select a Route', disabled: true, variant: 'primary' };
-  }, [
-    isConnected, fromChainId, fromToken, amount, isBalanceLoading, 
-    hasSufficientBalance, isWrongNetwork, isLoadingRoutes, routeError,
-    isRoutesFetched, routes, isExecuting, selectedRoute, fromChainName,
-    privacyEnabled, isPrivacyExecuting
-  ]);
-
-  // Handle network switch from modal
-  const handleNetworkSwitch = () => {
-    if (fromChainId) {
-      switchChain?.({ chainId: fromChainId as 1 | 10 | 42161 | 137 | 8453 | 56 | 43114 | 998 });
-    }
-    setShowNetworkSwitchModal(false);
-  };
-
-  // Handle bridge execution or network switch
+  // Handle bridge execution
   const handleBridge = async () => {
-    if (isWrongNetwork && fromChainId) {
-      setShowNetworkSwitchModal(true);
-      return;
-    }
-    if (!selectedRoute) return;
+    if (!quote) return;
     
-    let success = false;
-    
-    // Check if this is a privacy route
-    if (isPrivacyRoute(selectedRoute)) {
-      success = await executePrivacyRoute(selectedRoute as PrivacyRouteQuote);
-    } else {
-      success = await execute(selectedRoute);
-    }
+    const success = await execute(quote);
     
     if (success && autoDeposit && toToken.symbol === 'USDC') {
       setShowDepositModal(true);
     }
-  };
-
-  // Handle retry
-  const handleRetry = async () => {
-    await retry();
   };
 
   // Handle max button
@@ -342,184 +87,67 @@ export function BridgeWidget() {
     }
   };
 
-  // Generate detailed error/info message
-  const statusMessage: StatusMessage = useMemo(() => {
-    if (!isConnected) return null;
-    
-    // Show engine initialization status
-    if (isEngineInitializing) {
-      return {
-        type: 'info',
-        message: 'Initializing privacy engine... This may take a moment on first load.',
-      };
-    }
-    
-    // Show engine error - but only if user is trying to use privacy
-    if (engineError && !privacyEnabled) {
-      // Don't show error for standard mode - privacy is optional
-      return null;
-    }
-    
-    if (engineError && privacyEnabled) {
-      return {
-        type: 'warning',
-        title: 'Privacy Mode Unavailable',
-        message: 'The privacy engine could not be initialized. Standard bridging is still available.',
-      };
-    }
-    
-    // Show wallet error (if privacy is enabled)
-    if (privacyEnabled && walletError) {
-      return {
-        type: 'error',
-        title: 'Privacy Wallet Error',
-        message: walletError,
-      };
-    }
-    
-    // Show last error with action
-    if (lastError && executionStatus.status === 'failed') {
-      return {
-        type: 'error',
-        title: lastError.title,
-        message: lastError.message,
-        action: lastError.action,
-        canRetry: canRetry,
-      };
-    }
-    
-    if (!hasSufficientBalance && amount && parseFloat(amount) > 0) {
-      const needed = parseFloat(amount);
-      const have = balance ? parseFloat(balance.formatted) : 0;
-      return {
-        type: 'error',
-        message: `You need ${formatAmount(needed.toString(), 4)} ${fromToken?.symbol} but only have ${formatAmount(have.toString(), 4)}`,
-      };
-    }
-    if (routeError) {
-      return {
-        type: 'error',
-        message: routeError.message || 'Failed to find a route. Try a different amount or token.',
-      };
-    }
-    if (isRoutesFetched && (!routes || routes.length === 0) && !isLoadingRoutes && amount && parseFloat(amount) > 0 && hasSufficientBalance) {
-      return {
-        type: 'warning',
-        message: 'No bridge route found for this pair. Try a larger amount or different token.',
-      };
-    }
-    if (isWrongNetwork && fromChainId) {
-      return {
-        type: 'info',
-        message: 'You need to switch networks to bridge from this chain.',
-      };
-    }
-    // Show transaction status when polling
-    if (isPolling && txStatus) {
-      return {
-        type: 'info',
-        message: getStatusMessage(txStatus),
-      };
-    }
-    return null;
-  }, [isConnected, hasSufficientBalance, amount, balance, fromToken, routeError, isRoutesFetched, routes, isLoadingRoutes, isWrongNetwork, fromChainId, lastError, executionStatus.status, canRetry, isPolling, txStatus, isEngineInitializing, engineError, privacyEnabled, walletError]);
+  const canBridge = isConnected && quote && !isExecuting && parseFloat(amount) > 0;
 
   return (
-    <div className="w-full max-w-md mx-auto space-y-6 px-4 sm:px-0">
+    <div className="w-full max-w-md mx-auto space-y-4 px-4 sm:px-0">
       {/* Main Bridge Card */}
       <motion.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         className="bg-dark-800/80 border border-dark-400/30 rounded-2xl p-5 sm:p-6"
       >
-        <div className="space-y-6">
-          {/* Header with Privacy Toggle and Slippage Settings */}
-          <div className="space-y-2">
+        <div className="space-y-5">
+          {/* From Section */}
+          <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-medium text-white/50">From</span>
-                {privacyEnabled && (
-                  <span className="flex items-center gap-1 px-2 py-0.5 bg-purple-500/20 border border-purple-500/30 rounded-full">
-                    <Shield className="w-3 h-3 text-purple-400" />
-                    <span className="text-xs font-medium text-purple-400">Private</span>
-                  </span>
-                )}
-              </div>
-              <div className="flex items-center gap-3">
-                <PrivacyToggle
-                  enabled={privacyEnabled}
-                  onToggle={handlePrivacyToggle}
-                  disabled={isExecuting || isWalletLoading || !isEngineReady}
-                  disabledReason={
-                    isExecuting ? 'Cannot change during transaction' :
-                    isWalletLoading ? 'Wallet is loading...' :
-                    !isEngineReady && isEngineInitializing ? 'Privacy engine is initializing...' :
-                    !isEngineReady && engineError ? 'Privacy engine unavailable' :
-                    !isEngineReady ? 'Privacy engine not ready' :
-                    undefined
-                  }
-                />
-                <SlippageSettings slippage={slippage} onSlippageChange={setSlippage} />
-              </div>
-            </div>
-            {balance && fromToken && (
-              <div className={cn(
-                'text-xs',
-                !hasSufficientBalance && amount && parseFloat(amount) > 0 
-                  ? 'text-red-400' 
-                  : 'text-white/40'
-              )}>
-                Balance: {formatAmount(balance.formatted)} {fromToken.symbol}
-              </div>
-            )}
-          </div>
-          
-          {/* Chain & Token Selection */}
-          <div className="grid grid-cols-2 gap-3">
-            <ChainSelector
-              selectedChainId={fromChainId}
-              selectedChainKey={fromChainKey}
-              onSelect={(chainId, chainKey) => {
-                setFromChainId(chainId);
-                setFromChainKey(chainKey || null);
-              }}
-            />
-            <TokenSelector
-              chainId={fromChainId}
-              selectedToken={fromToken}
-              onSelect={setFromToken}
-            />
-          </div>
-
-          {/* Amount Input */}
-          <div className="relative">
-            <input
-              type="number"
-              inputMode="decimal"
-              placeholder="0.0"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              disabled={!fromToken}
-              className={cn(
-                'w-full bg-dark-700 border rounded-xl px-4 py-4 pr-16',
-                'text-xl sm:text-2xl font-semibold text-white placeholder-white/20',
-                'focus:outline-none',
-                'disabled:opacity-50 disabled:cursor-not-allowed',
-                'transition-colors duration-200',
-                !hasSufficientBalance && amount && parseFloat(amount) > 0
-                  ? 'border-red-500/50 focus:border-red-500'
-                  : 'border-dark-400/30 focus:border-accent/40'
+              <span className="text-sm font-medium text-white/50">From</span>
+              {balance && fromToken && (
+                <span className="text-xs text-white/30">
+                  Balance: {formatAmount(balance.formatted)} {fromToken.symbol}
+                </span>
               )}
-            />
-            {balance && fromToken && (
-              <button
-                onClick={handleMax}
-                className="absolute right-3 top-1/2 -translate-y-1/2 px-2.5 py-1 text-xs font-semibold 
-                           text-accent bg-accent/10 hover:bg-accent/20 rounded-lg transition-colors"
-              >
-                MAX
-              </button>
-            )}
+            </div>
+            
+            <div className="grid grid-cols-2 gap-3">
+              <ChainSelector
+                selectedChainId={fromChainId}
+                onSelect={setFromChainId}
+              />
+              <TokenSelector
+                chainId={fromChainId}
+                selectedToken={fromToken}
+                onSelect={setFromToken}
+              />
+            </div>
+
+            {/* Amount Input */}
+            <div className="relative">
+              <input
+                type="number"
+                inputMode="decimal"
+                placeholder="0.0"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                disabled={!fromToken}
+                className={cn(
+                  'w-full bg-dark-700 border border-dark-400/30 rounded-xl px-4 py-4 pr-16',
+                  'text-xl sm:text-2xl font-semibold text-white placeholder-white/20',
+                  'focus:outline-none focus:border-accent/40',
+                  'disabled:opacity-50 disabled:cursor-not-allowed',
+                  'transition-colors duration-200'
+                )}
+              />
+              {balance && fromToken && (
+                <button
+                  onClick={handleMax}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 px-2.5 py-1 text-xs font-semibold 
+                             text-accent bg-accent/10 hover:bg-accent/20 rounded-lg transition-colors"
+                >
+                  MAX
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Arrow Divider */}
@@ -530,12 +158,12 @@ export function BridgeWidget() {
           </div>
 
           {/* To Section */}
-          <div className="space-y-4">
-            <span className="text-sm font-medium text-white/50">To (Hyperliquid)</span>
+          <div className="space-y-3">
+            <span className="text-sm font-medium text-white/50">To (HyperEVM)</span>
             
             {/* Destination Token Selector */}
             <div className="flex gap-2">
-              {hyperliquidTokens.map((token) => (
+              {hyperEVMTokens.map((token) => (
                 <button
                   key={token.symbol}
                   onClick={() => setToToken(token)}
@@ -565,16 +193,16 @@ export function BridgeWidget() {
               ))}
             </div>
 
-            {/* Hyperliquid Badge */}
+            {/* HyperEVM Badge */}
             <div className="flex items-center gap-2.5 p-3 bg-dark-700/50 rounded-xl border border-dark-400/20">
               <img 
                 src="/assets/green.png" 
-                alt="Hyperliquid" 
+                alt="Liquyn" 
                 className="h-7 w-auto"
               />
               <div>
-                <div className="text-sm font-medium text-white">Hyperliquid</div>
-                <div className="text-xs text-white/40">Chain ID: {HYPERLIQUID_CHAIN_ID}</div>
+                <div className="text-sm font-medium text-white">HyperEVM</div>
+                <div className="text-xs text-white/40">Chain ID: 998</div>
               </div>
             </div>
           </div>
@@ -582,18 +210,13 @@ export function BridgeWidget() {
           {/* Auto-Deposit Toggle */}
           {toToken.symbol === 'USDC' && (
             <div className="flex items-center justify-between p-3 bg-dark-700/50 rounded-xl border border-dark-400/20">
-              <div className="flex-1">
-                <span className="text-sm text-white/90">Auto-deposit to trading</span>
-                <p className="text-[11px] text-white/40 mt-0.5">
-                  {autoDeposit 
-                    ? 'USDC will be ready to trade immediately'
-                    : 'You can deposit manually after bridging'}
-                </p>
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-white/70">Auto-deposit to Hyperliquid</span>
               </div>
               <button
                 onClick={() => setAutoDeposit(!autoDeposit)}
                 className={cn(
-                  'relative w-10 h-5 rounded-full transition-colors duration-200 ml-3',
+                  'relative w-10 h-5 rounded-full transition-colors duration-200',
                   autoDeposit ? 'bg-accent' : 'bg-dark-500'
                 )}
               >
@@ -606,203 +229,55 @@ export function BridgeWidget() {
             </div>
           )}
 
-          {/* Privacy Wallet Setup Status */}
-          <AnimatePresence>
-            {(showPrivacySetup || isAwaitingSignature) && (
-              <motion.div
-                initial={{ opacity: 0, y: -10, height: 0 }}
-                animate={{ opacity: 1, y: 0, height: 'auto' }}
-                exit={{ opacity: 0, y: -10, height: 0 }}
-                className="p-3 rounded-xl text-sm bg-purple-500/10 border border-purple-500/20"
-              >
-                <div className="flex items-center gap-3">
-                  {isAwaitingSignature ? (
-                    <Lock className="w-5 h-5 text-purple-400 animate-pulse" />
-                  ) : (
-                    <Loader2 className="w-5 h-5 text-purple-400 animate-spin" />
-                  )}
-                  <div>
-                    <p className="font-medium text-purple-400">
-                      {isAwaitingSignature ? 'Sign to Enable Privacy' : 'Setting Up Privacy Wallet'}
-                    </p>
-                    <p className="text-purple-400/70 text-xs mt-0.5">
-                      {isAwaitingSignature 
-                        ? 'Please sign the message in your wallet to create your private RAILGUN wallet'
-                        : 'Creating your RAILGUN private wallet...'}
-                    </p>
-                  </div>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          {/* RAILGUN Address Display (when privacy enabled) */}
-          {privacyEnabled && isWalletReady && railgunAddress && (
-            <motion.div
-              initial={{ opacity: 0, y: -5 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="p-2 rounded-lg bg-purple-500/5 border border-purple-500/10"
-            >
-              <div className="flex items-center gap-2 text-xs text-purple-400">
-                <Shield className="w-3.5 h-3.5" />
-                <span className="text-purple-400/60">Private Address:</span>
-                <code className="font-mono text-purple-400/80 truncate max-w-[180px]">
-                  {railgunAddress.slice(0, 12)}...{railgunAddress.slice(-8)}
-                </code>
-              </div>
-            </motion.div>
-          )}
-
-          {/* Status/Error Message */}
-          <AnimatePresence mode="wait">
-            {statusMessage && (
-              <motion.div
-                initial={{ opacity: 0, y: -10, height: 0 }}
-                animate={{ opacity: 1, y: 0, height: 'auto' }}
-                exit={{ opacity: 0, y: -10, height: 0 }}
-                className={cn(
-                  'p-3 rounded-xl text-sm',
-                  statusMessage.type === 'error' && 'bg-red-500/10 border border-red-500/20',
-                  statusMessage.type === 'warning' && 'bg-yellow-500/10 border border-yellow-500/20',
-                  statusMessage.type === 'info' && 'bg-blue-500/10 border border-blue-500/20'
-                )}
-              >
-                <div className="flex items-start gap-2">
-                  {statusMessage.type === 'error' && <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0 text-red-400" />}
-                  {statusMessage.type === 'warning' && <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0 text-yellow-400" />}
-                  {statusMessage.type === 'info' && <Info className="w-4 h-4 mt-0.5 flex-shrink-0 text-blue-400" />}
-                  <div className="flex-1">
-                    {statusMessage.title && (
-                      <p className={cn(
-                        'font-medium mb-0.5',
-                        {
-                          'text-red-400': statusMessage.type === 'error',
-                          'text-yellow-400': statusMessage.type === 'warning',
-                          'text-blue-400': statusMessage.type === 'info',
-                        }
-                      )}>
-                        {statusMessage.title}
-                      </p>
-                    )}
-                    <p className={cn({
-                      'text-red-400/80': statusMessage.type === 'error',
-                      'text-yellow-400/80': statusMessage.type === 'warning',
-                      'text-blue-400/80': statusMessage.type === 'info',
-                    })}>
-                      {statusMessage.message}
-                    </p>
-                    {statusMessage.action && (
-                      <p className="text-white/50 mt-1 text-xs">
-                        {statusMessage.action}
-                      </p>
-                    )}
-                  </div>
-                </div>
-                {statusMessage.canRetry && (
-                  <button
-                    onClick={handleRetry}
-                    className="mt-2 w-full flex items-center justify-center gap-2 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-lg transition-colors"
-                  >
-                    <RefreshCw className="w-4 h-4" />
-                    Retry ({retryCount}/{maxRetries})
-                  </button>
-                )}
-              </motion.div>
-            )}
-          </AnimatePresence>
-
           {/* Bridge Button */}
           <Button
             onClick={handleBridge}
-            disabled={buttonState.disabled}
-            className={cn(
-              'w-full',
-              buttonState.variant === 'error' && 'bg-red-500/20 border-red-500/30 text-red-400 hover:bg-red-500/30',
-              buttonState.variant === 'warning' && 'bg-yellow-500/20 border-yellow-500/30 text-yellow-400 hover:bg-yellow-500/30'
-            )}
+            disabled={!canBridge}
+            isLoading={isExecuting}
+            className="w-full"
             size="lg"
           >
-            <span className="flex items-center justify-center gap-2">
-              {buttonState.showLoader && <Loader2 className="w-4 h-4 animate-spin" />}
-              {buttonState.text}
-            </span>
+            {!isConnected
+              ? 'Connect Wallet'
+              : !fromChainId
+              ? 'Select Chain'
+              : !fromToken
+              ? 'Select Token'
+              : !amount || parseFloat(amount) <= 0
+              ? 'Enter Amount'
+              : isLoadingQuote
+              ? 'Finding Route...'
+              : isExecuting
+              ? 'Bridging...'
+              : 'Bridge to HyperEVM'}
           </Button>
         </div>
       </motion.div>
 
-      {/* Route Options - Shows multiple routes for comparison */}
-      {(isLoadingRoutes || (routes && routes.length > 0)) && (
-        <RouteOptions
-          routes={routes || []}
-          selectedRoute={selectedRoute}
-          onSelectRoute={setSelectedRoute}
-          isLoading={isLoadingRoutes}
-        />
-      )}
-
-      {/* Quote Display - Shows selected route details */}
-      {selectedRoute && !isLoadingRoutes && (
+      {/* Quote Display */}
+      {(isLoadingQuote || quote) && (
         <QuoteCard
-          quote={selectedRoute}
-          isLoading={false}
-          error={undefined}
+          quote={quote || null}
+          isLoading={isLoadingQuote}
+          error={quoteError?.message}
         />
       )}
 
-      {/* Execution Progress - Standard */}
-      <div ref={executionProgressRef}>
-        {!privacyEnabled && (
-          <ExecutionProgress
-            status={executionStatus}
-            steps={selectedRoute?.steps}
-            stepStatuses={stepExecutions}
-            onClose={() => {
-              resetExecution();
-              if (executionStatus.status === 'completed') {
-                setAmount('');
-                setSelectedRoute(null);
-                refetchRoutes();
-              }
-            }}
-            onRetry={canRetry ? handleRetry : undefined}
-          />
-        )}
-
-        {/* Execution Progress - Privacy */}
-        {privacyEnabled && privacyExecutionState.status !== 'idle' && (
-          <PrivacyProgress
-            executionState={privacyExecutionState}
-            onClose={() => {
-              resetPrivacyExecution();
-              if (privacyExecutionState.status === 'completed') {
-                setAmount('');
-                setSelectedRoute(null);
-                refetchRoutes();
-              }
-            }}
-            onRetry={privacyExecutionState.status === 'failed' ? () => {
-              if (selectedRoute && isPrivacyRoute(selectedRoute)) {
-                executePrivacyRoute(selectedRoute as PrivacyRouteQuote);
-              }
-            } : undefined}
-          />
-        )}
-      </div>
-
-      {/* Network Switch Modal */}
-      <NetworkSwitchModal
-        isOpen={showNetworkSwitchModal}
-        onClose={() => setShowNetworkSwitchModal(false)}
-        onSwitch={handleNetworkSwitch}
-        fromChainName={fromChainName || 'Unknown Chain'}
-        fromChainLogo={fromChainLogo}
-        currentChainName={currentChainName}
+      {/* Execution Progress */}
+      <ExecutionProgress
+        status={executionStatus}
+        onClose={() => {
+          resetExecution();
+          if (executionStatus.status === 'completed') {
+            setAmount('');
+          }
+        }}
       />
 
       {/* Deposit Modal */}
-      {showDepositModal && selectedRoute && (
+      {showDepositModal && quote && (
         <DepositToHyperliquid
-          amount={formatAmount(Number(selectedRoute.toAmount) / Math.pow(10, selectedRoute.toToken.decimals), 2)}
+          amount={formatAmount(Number(quote.toAmount) / Math.pow(10, quote.toToken.decimals), 2)}
           isOpen={showDepositModal}
           onClose={() => setShowDepositModal(false)}
           onSuccess={() => {
