@@ -89,18 +89,49 @@ export default defineConfig({
   },
   build: {
     target: 'esnext',
+    // Use esbuild for minification - faster and uses less memory than terser
+    minify: 'esbuild',
+    // Disable sourcemaps to reduce memory usage
+    sourcemap: false,
+    // Increase chunk size warning limit (we know RAILGUN is large)
+    chunkSizeWarningLimit: 15000,
     rollupOptions: {
-      // Ensure proper handling of CommonJS modules
       output: {
-        manualChunks: {
-          // Split RAILGUN into its own chunk for better caching
-          railgun: [
-            '@railgun-community/engine',
-            '@railgun-community/wallet',
-            '@railgun-community/shared-models',
-          ],
+        // Split into more granular chunks to reduce memory per chunk
+        manualChunks(id) {
+          // RAILGUN engine - largest chunk
+          if (id.includes('@railgun-community/engine')) {
+            return 'railgun-engine';
+          }
+          // RAILGUN wallet 
+          if (id.includes('@railgun-community/wallet')) {
+            return 'railgun-wallet';
+          }
+          // RAILGUN shared models
+          if (id.includes('@railgun-community/shared-models')) {
+            return 'railgun-shared';
+          }
+          // RAILGUN WASM modules
+          if (id.includes('@railgun-community/poseidon-hash-wasm') || 
+              id.includes('@railgun-community/curve25519-scalarmult-wasm')) {
+            return 'railgun-wasm';
+          }
+          // Ethers.js
+          if (id.includes('ethers')) {
+            return 'ethers';
+          }
+          // Wallet connect / web3 related
+          if (id.includes('@reown') || id.includes('@walletconnect') || id.includes('wagmi') || id.includes('viem')) {
+            return 'web3';
+          }
+          // React and related
+          if (id.includes('react')) {
+            return 'react';
+          }
         },
       },
+      // Reduce memory by limiting parallelism
+      maxParallelFileOps: 2,
     },
   },
 })
