@@ -174,12 +174,17 @@ export async function executeShield(
 
   // Ensure provider is loaded for the target network
   const chainId = getChainId(params.networkName);
-  if (chainId) {
-    const providerLoaded = await loadNetworkProvider(chainId as RailgunChainId);
-    if (!providerLoaded) {
-      console.warn(`[RAILGUN] Could not load provider for ${params.networkName}, continuing anyway`);
-    }
+  console.log(`[RAILGUN] Shield requested for network: ${params.networkName}, chainId: ${chainId}`);
+  
+  if (!chainId) {
+    return { success: false, error: `Unsupported network: ${params.networkName}` };
   }
+  
+  const providerLoaded = await loadNetworkProvider(chainId as RailgunChainId);
+  if (!providerLoaded) {
+    return { success: false, error: `Could not load RAILGUN provider for ${params.networkName}. Please try again.` };
+  }
+  console.log(`[RAILGUN] Provider loaded successfully for ${params.networkName}`);
 
   const walletId = getWalletId();
   const railgunAddress = getRailgunAddress();
