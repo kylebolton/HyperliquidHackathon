@@ -40,7 +40,7 @@ import {
   getNetworkName,
   RAILGUN_SUPPORTED_CHAIN_IDS,
 } from './types';
-import { getWalletId, isWalletReady, getRailgunAddress } from './wallet';
+import { getWalletId, isWalletReady, getRailgunAddress, rescanWallet } from './wallet';
 import { isEngineReady, loadNetworkProvider } from './engine';
 import { getChainId } from './types';
 
@@ -615,6 +615,26 @@ export async function executePrivacyFlow(
 
         await delay(1000);
       }
+    }
+
+    // Rescan wallet to pick up the shielded balance
+    onProgress({
+      status: 'waiting',
+      currentStep: 4,
+      totalSteps: 5,
+      shieldTxHash: shieldResult.txHash,
+      message: 'Syncing private balance...',
+    });
+
+    try {
+      console.log('[RAILGUN] Rescanning wallet to find shielded balance...');
+      await rescanWallet();
+      // Give it a moment to process
+      await delay(3000);
+      console.log('[RAILGUN] Wallet rescan complete');
+    } catch (rescanError) {
+      console.warn('[RAILGUN] Wallet rescan warning:', rescanError);
+      // Continue anyway - balance might already be there
     }
 
     // Step 5: Unshield

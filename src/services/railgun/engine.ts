@@ -85,13 +85,10 @@ export function isEngineReady(): boolean {
 
 /**
  * Default POI (Proof of Innocence) aggregator nodes
- * These are the official RAILGUN community nodes
+ * Empty for hackathon demo - POI validation skipped
+ * In production, use official RAILGUN POI nodes
  */
-const DEFAULT_POI_NODES = [
-  'https://poi-node-1.railgun.ch',
-  'https://poi-node-2.railgun.ch',
-  'https://poi-aggregator.railway.app',
-];
+const DEFAULT_POI_NODES: string[] = [];
 
 /**
  * RPC provider configurations for supported networks
