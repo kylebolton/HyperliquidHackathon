@@ -418,7 +418,7 @@ export async function executeUnshield(
       [], // No NFTs
       toAddress,
       0n, // broadcasterFeeERC20AmountRecipient
-      false, // sendWithPublicWallet - using direct submission
+      true, // sendWithPublicWallet - user's wallet pays gas directly
     );
 
     // Prepare gas details
@@ -459,7 +459,7 @@ export async function executeUnshield(
         [], // No NFTs
         toAddress,
         0n, // broadcasterFeeERC20AmountRecipient
-        false, // sendWithPublicWallet
+        true, // sendWithPublicWallet - user's wallet pays gas directly
         progressCallback
       );
     } catch (proofError) {
@@ -483,7 +483,7 @@ export async function executeUnshield(
       [], // No NFTs
       toAddress,
       0n, // broadcasterFeeERC20AmountRecipient
-      false, // sendWithPublicWallet
+      true, // sendWithPublicWallet - user's wallet pays gas directly
       gasDetails
     );
 
