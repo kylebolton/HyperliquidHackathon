@@ -7,6 +7,7 @@ interface PrivacyToggleProps {
   enabled: boolean;
   onToggle: (enabled: boolean) => void;
   disabled?: boolean;
+  disabledReason?: string;
 }
 
 interface TradeoffItem {
@@ -48,7 +49,7 @@ const TRADEOFFS: TradeoffItem[] = [
   },
 ];
 
-export function PrivacyToggle({ enabled, onToggle, disabled }: PrivacyToggleProps) {
+export function PrivacyToggle({ enabled, onToggle, disabled, disabledReason }: PrivacyToggleProps) {
   const [showInfo, setShowInfo] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
 
@@ -69,6 +70,11 @@ export function PrivacyToggle({ enabled, onToggle, disabled }: PrivacyToggleProp
     setShowConfirm(false);
   };
 
+  // Determine tooltip text
+  const tooltipText = disabled 
+    ? (disabledReason || 'Privacy mode is currently unavailable')
+    : (enabled ? 'Switch to standard mode' : 'Enable privacy mode');
+
   return (
     <>
       <div className="flex items-center gap-3">
@@ -85,6 +91,7 @@ export function PrivacyToggle({ enabled, onToggle, disabled }: PrivacyToggleProp
         <button
           onClick={handleToggleClick}
           disabled={disabled}
+          title={tooltipText}
           className={cn(
             'flex items-center gap-2 px-3 py-2 rounded-lg transition-all duration-200',
             'active:scale-95',

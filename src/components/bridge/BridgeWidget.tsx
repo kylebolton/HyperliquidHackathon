@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAccount, useBalance, useSwitchChain } from 'wagmi';
 import { parseUnits } from 'viem';
-import { ArrowDown, AlertCircle, Loader2, Info, RefreshCw, Shield } from 'lucide-react';
+import { ArrowDown, AlertCircle, Loader2, Info, RefreshCw, Shield, Lock } from 'lucide-react';
 import { cn, formatAmount } from '../../lib/utils';
 import { ChainSelector, TokenSelector } from './ChainTokenSelector';
 import { QuoteCard } from './QuoteCard';
@@ -18,6 +18,8 @@ import { useLiFiRoutes } from '../../hooks/useLiFiQuote';
 import { useRetryExecution } from '../../hooks/useRetryExecution';
 import { usePrivacyRoutes, usePrivacyExecution, isPrivacyRoute } from '../../hooks/usePrivacyRoute';
 import { useTransactionStatus, getStatusMessage } from '../../hooks/useTransactionStatus';
+import { useRailgunEngine } from '../../hooks/useRailgunEngine';
+import { useRailgunWallet } from '../../hooks/useRailgunWallet';
 import { hyperliquidTokens, type Token } from '../../config/tokens';
 import { HYPERLIQUID_CHAIN_ID, sourceSelectorChains, chainMetadata } from '../../config/chains';
 import type { Quote, PrivacyRouteQuote } from '../../types';
@@ -41,6 +43,22 @@ export function BridgeWidget() {
   const { address, isConnected, chainId: connectedChainId } = useAccount();
   const { switchChain } = useSwitchChain();
   
+  // RAILGUN Engine and Wallet hooks
+  const { 
+    isReady: isEngineReady, 
+    isInitializing: isEngineInitializing,
+    error: engineError,
+  } = useRailgunEngine(true); // Auto-initialize on mount
+  
+  const {
+    isReady: isWalletReady,
+    isLoading: isWalletLoading,
+    isAwaitingSignature,
+    railgunAddress,
+    createWallet,
+    error: walletError,
+  } = useRailgunWallet(false); // Don't auto-create, wait for user to enable privacy
+  
   // Ref for scrolling to execution progress
   const executionProgressRef = useRef<HTMLDivElement>(null);
   
@@ -56,6 +74,21 @@ export function BridgeWidget() {
   const [showNetworkSwitchModal, setShowNetworkSwitchModal] = useState(false);
   const [selectedRoute, setSelectedRoute] = useState<Quote | null>(null);
   const [privacyEnabled, setPrivacyEnabled] = useState(false);
+  const [showPrivacySetup, setShowPrivacySetup] = useState(false);
+
+  // Handle privacy toggle - create wallet if not ready
+  const handlePrivacyToggle = async (enabled: boolean) => {
+    if (enabled && !isWalletReady && isEngineReady) {
+      setShowPrivacySetup(true);
+      const walletId = await createWallet();
+      setShowPrivacySetup(false);
+      if (walletId) {
+        setPrivacyEnabled(true);
+      }
+    } else {
+      setPrivacyEnabled(enabled);
+    }
+  };
 
   // Get balance for selected token
   const { data: balance, isLoading: isBalanceLoading } = useBalance({
@@ -313,6 +346,37 @@ export function BridgeWidget() {
   const statusMessage: StatusMessage = useMemo(() => {
     if (!isConnected) return null;
     
+    // Show engine initialization status
+    if (isEngineInitializing) {
+      return {
+        type: 'info',
+        message: 'Initializing privacy engine... This may take a moment on first load.',
+      };
+    }
+    
+    // Show engine error - but only if user is trying to use privacy
+    if (engineError && !privacyEnabled) {
+      // Don't show error for standard mode - privacy is optional
+      return null;
+    }
+    
+    if (engineError && privacyEnabled) {
+      return {
+        type: 'warning',
+        title: 'Privacy Mode Unavailable',
+        message: 'The privacy engine could not be initialized. Standard bridging is still available.',
+      };
+    }
+    
+    // Show wallet error (if privacy is enabled)
+    if (privacyEnabled && walletError) {
+      return {
+        type: 'error',
+        title: 'Privacy Wallet Error',
+        message: walletError,
+      };
+    }
+    
     // Show last error with action
     if (lastError && executionStatus.status === 'failed') {
       return {
@@ -358,7 +422,7 @@ export function BridgeWidget() {
       };
     }
     return null;
-  }, [isConnected, hasSufficientBalance, amount, balance, fromToken, routeError, isRoutesFetched, routes, isLoadingRoutes, isWrongNetwork, fromChainId, lastError, executionStatus.status, canRetry, isPolling, txStatus]);
+  }, [isConnected, hasSufficientBalance, amount, balance, fromToken, routeError, isRoutesFetched, routes, isLoadingRoutes, isWrongNetwork, fromChainId, lastError, executionStatus.status, canRetry, isPolling, txStatus, isEngineInitializing, engineError, privacyEnabled, walletError]);
 
   return (
     <div className="w-full max-w-md mx-auto space-y-6 px-4 sm:px-0">
@@ -384,8 +448,16 @@ export function BridgeWidget() {
               <div className="flex items-center gap-3">
                 <PrivacyToggle
                   enabled={privacyEnabled}
-                  onToggle={setPrivacyEnabled}
-                  disabled={isExecuting}
+                  onToggle={handlePrivacyToggle}
+                  disabled={isExecuting || isWalletLoading || !isEngineReady}
+                  disabledReason={
+                    isExecuting ? 'Cannot change during transaction' :
+                    isWalletLoading ? 'Wallet is loading...' :
+                    !isEngineReady && isEngineInitializing ? 'Privacy engine is initializing...' :
+                    !isEngineReady && engineError ? 'Privacy engine unavailable' :
+                    !isEngineReady ? 'Privacy engine not ready' :
+                    undefined
+                  }
                 />
                 <SlippageSettings slippage={slippage} onSlippageChange={setSlippage} />
               </div>
@@ -532,6 +604,53 @@ export function BridgeWidget() {
                 />
               </button>
             </div>
+          )}
+
+          {/* Privacy Wallet Setup Status */}
+          <AnimatePresence>
+            {(showPrivacySetup || isAwaitingSignature) && (
+              <motion.div
+                initial={{ opacity: 0, y: -10, height: 0 }}
+                animate={{ opacity: 1, y: 0, height: 'auto' }}
+                exit={{ opacity: 0, y: -10, height: 0 }}
+                className="p-3 rounded-xl text-sm bg-purple-500/10 border border-purple-500/20"
+              >
+                <div className="flex items-center gap-3">
+                  {isAwaitingSignature ? (
+                    <Lock className="w-5 h-5 text-purple-400 animate-pulse" />
+                  ) : (
+                    <Loader2 className="w-5 h-5 text-purple-400 animate-spin" />
+                  )}
+                  <div>
+                    <p className="font-medium text-purple-400">
+                      {isAwaitingSignature ? 'Sign to Enable Privacy' : 'Setting Up Privacy Wallet'}
+                    </p>
+                    <p className="text-purple-400/70 text-xs mt-0.5">
+                      {isAwaitingSignature 
+                        ? 'Please sign the message in your wallet to create your private RAILGUN wallet'
+                        : 'Creating your RAILGUN private wallet...'}
+                    </p>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* RAILGUN Address Display (when privacy enabled) */}
+          {privacyEnabled && isWalletReady && railgunAddress && (
+            <motion.div
+              initial={{ opacity: 0, y: -5 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="p-2 rounded-lg bg-purple-500/5 border border-purple-500/10"
+            >
+              <div className="flex items-center gap-2 text-xs text-purple-400">
+                <Shield className="w-3.5 h-3.5" />
+                <span className="text-purple-400/60">Private Address:</span>
+                <code className="font-mono text-purple-400/80 truncate max-w-[180px]">
+                  {railgunAddress.slice(0, 12)}...{railgunAddress.slice(-8)}
+                </code>
+              </div>
+            </motion.div>
           )}
 
           {/* Status/Error Message */}
