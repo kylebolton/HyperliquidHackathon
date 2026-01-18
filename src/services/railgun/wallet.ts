@@ -17,6 +17,7 @@ import {
 import {
   isDefined,
   TXIDVersion,
+  NetworkName,
 } from '@railgun-community/shared-models';
 import { ethers } from 'ethers';
 import type { WalletState, WalletStatus, RailgunChainId } from './types';
@@ -362,7 +363,7 @@ async function startBackgroundScan(walletId: string): Promise<void> {
 /**
  * Force rescan merkletrees for the wallet
  */
-export async function rescanWallet(): Promise<void> {
+export async function rescanWallet(targetNetwork?: NetworkName): Promise<void> {
   const { walletId } = walletState;
   
   if (!walletId) {
@@ -370,18 +371,28 @@ export async function rescanWallet(): Promise<void> {
   }
 
   try {
-    // Get all supported networks
-    const networks = Object.values(RAILGUN_SUPPORTED_CHAIN_IDS).map(
-      chainId => getNetworkName(chainId)
-    );
+    // If specific network provided, only scan that one
+    const networks = targetNetwork 
+      ? [targetNetwork]
+      : Object.values(RAILGUN_SUPPORTED_CHAIN_IDS).map(chainId => getNetworkName(chainId));
 
     for (const networkName of networks) {
       try {
-        // Note: API changed - rescan takes chain and txidVersion
+        console.log(`[RAILGUN] Rescanning merkletree for ${networkName}...`);
+        
+        // First try to refresh balances
+        await refreshBalances(
+          { name: networkName } as any,
+          [walletId],
+        );
+        console.log(`[RAILGUN] Balance refresh complete for ${networkName}`);
+        
+        // Then do full rescan
         await rescanFullUTXOMerkletreesAndWallets(
-          { name: networkName } as any, // Chain object
+          { name: networkName } as any,
           TXIDVersion.V2_PoseidonMerkle,
         );
+        console.log(`[RAILGUN] Full rescan complete for ${networkName}`);
       } catch (error) {
         console.warn(`[RAILGUN] Rescan failed for ${networkName}:`, error);
       }

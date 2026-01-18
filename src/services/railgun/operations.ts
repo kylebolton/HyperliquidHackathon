@@ -626,15 +626,32 @@ export async function executePrivacyFlow(
       message: 'Syncing private balance...',
     });
 
-    try {
-      console.log('[RAILGUN] Rescanning wallet to find shielded balance...');
-      await rescanWallet();
-      // Give it a moment to process
-      await delay(3000);
-      console.log('[RAILGUN] Wallet rescan complete');
-    } catch (rescanError) {
-      console.warn('[RAILGUN] Wallet rescan warning:', rescanError);
-      // Continue anyway - balance might already be there
+    // Try multiple times to find the shielded balance
+    const maxRetries = 3;
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        console.log(`[RAILGUN] Rescanning wallet (attempt ${attempt}/${maxRetries})...`);
+        onProgress({
+          status: 'waiting',
+          currentStep: 4,
+          totalSteps: 5,
+          shieldTxHash: shieldResult.txHash,
+          message: `Syncing private balance (attempt ${attempt}/${maxRetries})...`,
+        });
+        
+        // Rescan the specific network where we shielded
+        await rescanWallet(shieldParams.networkName);
+        
+        // Give it time to process
+        await delay(5000);
+        console.log('[RAILGUN] Wallet rescan complete');
+        break;
+      } catch (rescanError) {
+        console.warn(`[RAILGUN] Wallet rescan attempt ${attempt} failed:`, rescanError);
+        if (attempt < maxRetries) {
+          await delay(3000);
+        }
+      }
     }
 
     // Step 5: Unshield
