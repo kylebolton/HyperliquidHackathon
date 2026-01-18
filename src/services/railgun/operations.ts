@@ -93,7 +93,7 @@ export function getPrivacyQuote(chainId: RailgunChainId): PrivacyQuote {
   // Time estimates in seconds
   const estimatedShieldTime = chainId === RAILGUN_SUPPORTED_CHAIN_IDS.ETHEREUM ? 180 : 30;
   const estimatedUnshieldTime = chainId === RAILGUN_SUPPORTED_CHAIN_IDS.ETHEREUM ? 180 : 30;
-  const recommendedWaitTime = 600; // 10 minutes for anonymity
+  const recommendedWaitTime = 60; // 1 minute for demo (normally 10 min for production)
 
   return {
     chainId,
