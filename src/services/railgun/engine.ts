@@ -138,17 +138,24 @@ const RPC_PROVIDERS: Record<RailgunChainId, FallbackProviderJsonConfig> = {
   [RAILGUN_SUPPORTED_CHAIN_IDS.ARBITRUM]: {
     chainId: RAILGUN_SUPPORTED_CHAIN_IDS.ARBITRUM,
     providers: [
-      // Using CORS-friendly endpoints (arb1.arbitrum.io has CORS issues)
+      // CORS-friendly public RPC endpoints
       {
-        provider: 'https://arbitrum.llamarpc.com',
+        provider: 'https://arbitrum-one.publicnode.com',
         priority: 1,
         weight: 1,
         maxLogsPerBatch: 1,
         stallTimeout: 5000,
       },
       {
-        provider: 'https://arb-mainnet.g.alchemy.com/v2/demo',
+        provider: 'https://rpc.ankr.com/arbitrum',
         priority: 2,
+        weight: 1,
+        maxLogsPerBatch: 1,
+        stallTimeout: 5000,
+      },
+      {
+        provider: 'https://1rpc.io/arb',
+        priority: 3,
         weight: 1,
         maxLogsPerBatch: 1,
         stallTimeout: 5000,
