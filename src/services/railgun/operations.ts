@@ -233,8 +233,11 @@ export async function executeShield(
       message: 'Please sign the shield message...',
     });
 
-    // Sign the shield message
-    const shieldPrivateKey = await signer.signMessage(shieldSignatureMessage);
+    // Sign the shield message and derive a 32-byte private key
+    const signature = await signer.signMessage(shieldSignatureMessage);
+    // Hash the signature to get exactly 32 bytes (64 hex chars without 0x)
+    // The SDK expects a hex string without "0x" prefix
+    const shieldPrivateKey = ethers.keccak256(signature).slice(2);
 
     // Get gas estimate
     const gasEstimate = await gasEstimateForShield(
